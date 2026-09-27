@@ -47,7 +47,7 @@ verify
 
 ## 2. 스키마·마이그레이션·시드
 
-- [ ] Prisma 도입 (`prisma` 7.10.0, `@prisma/client`, `@prisma/adapter-pg`)
+- [x] Prisma 도입 (`prisma` 7.10.0, `@prisma/client`, `@prisma/adapter-pg`), `prisma.config.ts`, 첫 마이그레이션(owner 부분 유니크 인덱스 포함)
 - [ ] `plan.md`의 데이터 모델을 `schema.prisma`로 작성
 - [ ] `infra/prisma/*` 복사 (`monorepo-practice`)
 - [ ] 시드 — organization(free 1개, team 1개), user + user_identity(google), organization_member(owner),

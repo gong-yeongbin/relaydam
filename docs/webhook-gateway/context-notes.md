@@ -327,3 +327,13 @@ hook 계열(hookdam·hookkeep·hookmoat)과 비계열(weirbox·inletbox·relayda
 relaydam은 확인한 모든 곳이 비어 있었고, "받아 가뒀다가(dam) 흘려보낸다(relay)"가 제품 동작
 그대로다. 메타 헤더는 `X-Relaydam-*`, 로컬 DB 이름은 `relaydam`으로 같이 바꿨다.
 GitHub organization·도메인 선점은 사용자가 직접 한다.
+
+## Prisma 스키마 밖의 제약은 마이그레이션 SQL에 직접 쓴다 (2026-09-27)
+
+"조직당 owner 1명"은 `WHERE role = 'owner'` 부분 유니크 인덱스라 schema.prisma로 표현할 수 없다.
+`pnpm db:migrate`(`--create-only`)로 SQL을 만든 뒤 끝에 직접 덧붙이고 `db:deploy`한다. 적용 후
+`prisma migrate diff --from-config-datasource --to-schema`가 빈 마이그레이션을 내는 것을 확인했다.
+Prisma가 이 인덱스를 drift로 보고 다음 마이그레이션에서 DROP하지 않는다는 뜻이다.
+
+`prisma.config.ts`는 앱 루트에 있어 `tsconfig.build.json`의 `rootDir: ./src` 밖이다. build에서
+exclude하지 않으면 TS6059로 실패한다. `check-types`(tsconfig.json)에는 남겨 타입 검사는 받는다.
