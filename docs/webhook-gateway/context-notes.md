@@ -13,7 +13,7 @@
 |---|---|
 | pnpm + Turborepo 모노레포 | 검증된 구성. 바꿀 이유 없음 |
 | NestJS 11 + Prisma + PostgreSQL | 위와 같음 |
-| Valkey Stream 직접 구현 (BullMQ 아님) | BullMQ는 지연 큐·백오프·동시성 제한·DLQ를 전부 공짜로 준다. 그게 이 프로젝트 4·5·6단계 내용 전부다. 공짜로 받으면 설명할 게 "BullMQ가 해줍니다"만 남는다. 아웃박스+sweeper는 BullMQ가 주지도 않는다 |
+| Valkey Stream 직접 구현 (BullMQ 아님) | BullMQ는 지연 큐·백오프·동시성 제한·DLQ를 전부 공짜로 준다. 그게 이 프로젝트 8. delivery 모듈 내용 전부다. 공짜로 받으면 설명할 게 "BullMQ가 해줍니다"만 남는다. 아웃박스+sweeper는 BullMQ가 주지도 않는다 |
 | `packages/{typescript-config,eslint-config}` | 그대로 복사 |
 
 `monorepo-practice`의 `packages/prisma`, `packages/eslint`는 `node_modules`/`dist`만 있는
@@ -52,7 +52,7 @@ NestJS 11에서 설치되지 않는다. 생태계가 이미 12로 넘어간 상�
 NestJS 안의 코드 조직은 **전 모듈에 헥사고날(port/adapter) 한 규칙**을 적용한다. 도메인 클래스와
 매퍼는 만들지 않고 Prisma 생성 타입을 port 시그니처에 그대로 쓴다.
 
-이 프로젝트가 보여줄 것은 재시도·서킷·DLQ 설계이고, 체크리스트 4·5단계 verify가 "유닛 — 백오프
+이 프로젝트가 보여줄 것은 재시도·서킷·DLQ 설계이고, 체크리스트 8. delivery verify가 "유닛 — 백오프
 계산, 상태 전이표, 상태 머신"이다. 그 유닛 테스트를 Postgres·Valkey 없이 돌리려면 service가
 Prisma·ioredis를 몰라야 하는데, 헥사고날은 그것을 규칙으로 강제한다. 외부 의존이 Prisma, Valkey,
 목적지 HTTP, 암호화 넷뿐이라 port 수가 유한해서 비용도 유한하다.

@@ -6,10 +6,11 @@
 ## 문서
 
 `docs/webhook-gateway/`에 세 문서가 있다. 코드보다 먼저 여기를 본다.
+`plan.md`·`checklist.md`는 로컬 전용이라 git에 올리지 않는다(`.gitignore`). 클론에는 `context-notes.md`만 있다.
 
-- `plan.md` — 제품 범위, 시스템 구조, 데이터 모델, 단계별 계획. 바꾸려면 사용자와 합의한다.
+- `plan.md` — 제품 범위, 시스템 구조, 데이터 모델, 모듈별 계획. 바꾸려면 사용자와 합의한다.
 - `context-notes.md` — 결정과 근거. 코드만 봐서는 "왜"를 알 수 없는 결정을 내렸으면 여기에 덧붙인다.
-- `checklist.md` — 단계별 작업과 verify. verify를 실제로 실행해 통과한 것만 체크한다.
+- `checklist.md` — 모듈별 작업과 verify. verify를 실제로 실행해 통과한 것만 체크한다.
 
 ## 버전 동결
 

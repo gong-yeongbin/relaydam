@@ -31,3 +31,7 @@ dist
 
 # IDE
 .idea
+
+# 로컬 전용 문서 (git에 올리지 않는다)
+docs/webhook-gateway/plan.md
+docs/webhook-gateway/checklist.md

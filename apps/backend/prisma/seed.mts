@@ -46,7 +46,7 @@ async function main(): Promise<void> {
 						plan: 'team',
 						status: 'active',
 						customer_key: 'seed-customer-key',
-						// 암호화 모듈(7단계) 전이라 복호화할 수 없는 자리표시값이다. 결제 배치에 쓰지 않는다.
+						// 암호화 모듈(4. billing) 전이라 복호화할 수 없는 자리표시값이다. 결제 배치에 쓰지 않는다.
 						billing_key_enc: 'seed-placeholder',
 						card_issuer_code: '11',
 						card_number_masked: '1234-****-****-5678',
