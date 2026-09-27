@@ -352,3 +352,27 @@ DB에 닿지 못하면 첫 요청에서 500이 나는 대신 기동 단계에서
 없이 런타임 트리만으로 뜨는가"를 볼 수 없는데, docker build가 그것을 잡는다. 2단계에서도 `pnpm deploy`
 트리에 생성 클라이언트가 빠지는 문제를 이것으로 찾았다. 대신 CI가 이미지를 빌드하지 않으므로 단계마다
 재검증하지 않고, 크기 정리와 함께 11단계(AWS 배포)에서 한 번에 정비한다. 그 사이 깨져 있을 수 있다.
+
+## 로그인: 구글 ID 토큰 검증, access JWT 7일 (2026-09-27)
+
+**흐름.** 프론트가 Google Identity Services로 ID 토큰을 받아 `POST /auth/google { id_token }`로
+보낸다. 서버는 google-auth-library로 서명·aud·만료를 검증하고 JWT를 발급한다. 서버 리다이렉트(code
+교환) 방식은 client secret·state(CSRF)·콜백 URL을 관리해야 하는데, 얻는 것(구글 access token으로
+구글 API 호출)이 이 제품에 필요 없다. 검증을 port로 두면 테스트에서 fake로 바꿔 끼우기도 쉽다.
+
+**토큰.** access JWT 하나, 만료 7일, refresh 없음. 만료되면 다시 구글 로그인한다. refresh를 두면
+refresh_token 테이블(해시·만료·회전)과 `/auth/refresh`·`/auth/logout`이 따라온다. 대가는 로그아웃·
+강제 만료로 토큰을 즉시 무효화할 수 없다는 것이고, MVP에서 받아들인다. payload는 `sub`(user_id)뿐이다.
+role·조직은 넣지 않는다. 요청마다 `:orgId`로 membership을 조회한다("API 형식" 절 `/orgs/:orgId` 근거).
+
+**`@Roles()` 빈 인자.** `/me`처럼 로그인은 필요하지만 조직과 무관한 라우트에 쓴다. "모든 라우트에
+`@Public` 또는 `@Roles`" 규칙을 데코레이터 하나 더 늘리지 않고 지키기 위해서다. 인자가 있으면
+`:orgId`가 필수이고 membership role로 판단한다.
+
+## adapter 통합 테스트는 `pnpm test`에 들어간다 (2026-09-27)
+
+Prisma adapter spec은 `src/**/*.spec.ts`라 `pnpm test`가 실제 postgres에 붙는다. 그래서 `pnpm test`
+전에 `pnpm docker:up && pnpm db:deploy`가 필요하다. 별도 설정(`*.int-spec.ts`)으로 빼면 커버리지
+90% 게이트에서 adapter가 빠져 수치가 흔들린다. adapter만 exclude하는 것은 루트 CLAUDE.md가 금지한다.
+`test/setup.ts`가 `DATABASE_URL`을 로컬 compose 값으로 기본 설정하고, CI는 환경 변수로 덮어쓴다.
+테스트 데이터는 `@test.relaydam.local` 이메일로 만들고 afterAll에서 지운다.

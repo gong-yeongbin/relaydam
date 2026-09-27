@@ -5,7 +5,9 @@
 		"REDIS_URL",
 		"NODE_ENV",
 		"PORT",
-		"LOG_LEVEL"
+		"LOG_LEVEL",
+		"JWT_SECRET",
+		"GOOGLE_CLIENT_ID"
 	],
 	"tasks": {
 		"build": {

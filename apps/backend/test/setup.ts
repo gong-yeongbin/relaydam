@@ -4,3 +4,8 @@ import 'reflect-metadata';
 
 // 테스트 출력에 애플리케이션 로그가 섞이지 않게 한다.
 process.env.LOG_LEVEL ??= 'silent';
+
+// 로컬 docker compose와 같은 값. CI나 다른 DB를 쓰면 환경 변수로 덮어쓴다.
+process.env.DATABASE_URL ??= 'postgresql://postgres:1234@localhost:5432/relaydam';
+process.env.JWT_SECRET ??= 'test-jwt-secret';
+process.env.GOOGLE_CLIENT_ID ??= 'test-google-client-id';

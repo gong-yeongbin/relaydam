@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
+import { configureApp } from './common/configure-app';
 
 const PORT_DEFAULT = 3001;
 
@@ -10,6 +11,7 @@ async function bootstrap() {
 	// bufferLogs로 부팅 로그를 잡아뒀다가 Pino가 준비된 뒤 한꺼번에 내보낸다.
 	const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), { bufferLogs: true });
 	app.useLogger(app.get(Logger));
+	configureApp(app);
 
 	// SIGTERM에서 스트림 연결 종료 등 OnApplicationShutdown이 실행되도록 한다.
 	app.enableShutdownHooks();
