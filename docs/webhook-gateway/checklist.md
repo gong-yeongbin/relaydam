@@ -55,7 +55,7 @@ verify
 - [ ] 설정·로그 모델(api_key, source, destination, connection, event, delivery, delivery_attempt) 설계
       검토 후 스키마에 추가, 시드에 source(프리셋 3종)·destination·connection 추가
 - [x] 루트 `dev` 스크립트에 `db:deploy`/`db:generate`/`db:seed` 추가
-- [ ] Dockerfile에 `prisma generate` + deploy 트리 재생성 단계 추가
+- [x] Dockerfile에 `prisma generate` + deploy 트리 재생성 단계 추가 — 이미지 arm64 852MB, compose postgres로 기동 → `/health` 200
 
 verify
 
@@ -189,6 +189,8 @@ verify
 
 - [ ] Terraform 복사·수정 — NLB 제거, worker ECS 서비스 추가, 이름·도메인 변수화
 - [ ] ElastiCache Valkey **9.1** (로컬 태그와 일치)
+- [ ] Dockerfile 재검증 + 이미지 크기 정리 — `@prisma/client` peer(prisma CLI·studio·pglite·typescript·effect)가
+      `--prod` 트리에 딸려 들어와 427MB → 852MB가 됐다(2단계)
 - [ ] `ci.yml` 신규 (lint·check-types·test)
 - [ ] `deploy-backend.yml`, `deploy-frontend.yml` 변수화
 - [ ] bootstrap → apply

@@ -23,6 +23,8 @@ RUN pnpm install --frozen-lockfile --filter backend...
 COPY apps/backend apps/backend
 COPY packages packages
 
+# 생성 클라이언트가 없으면 @prisma/client 타입이 비어 build가 실패한다.
+RUN pnpm --filter backend run generate
 RUN pnpm --filter backend run build
 
 # 런타임 의존성만 담긴 자립형 트리를 만든다 — dev 의존성이 빠지고 pnpm 심볼릭 링크도 풀린다.
@@ -31,6 +33,11 @@ RUN pnpm --filter backend run build
 # 않게 만든다. backend의 워크스페이스 의존성은 devDependencies뿐이라 --prod에서 어차피
 # 빠지므로, 로컬 DX를 건드리지 않는 --legacy를 쓴다.
 RUN pnpm --filter backend deploy --prod --legacy /app
+
+# deploy는 node_modules를 새로 깔아 위에서 생성한 클라이언트가 /app에 없다. /app 기준으로 다시 생성한다.
+# prisma CLI는 devDependency라 /app에 없으므로 빌드 단계의 것을 쓴다. prisma.config.ts는 같은 이유로
+# `prisma/config`를 불러오지 못하고 런타임에도 필요 없으니 지우고 스키마를 직접 넘긴다.
+RUN cd /app && rm prisma.config.ts && /repo/apps/backend/node_modules/.bin/prisma generate --schema prisma/schema.prisma
 
 FROM base AS runner
 ENV NODE_ENV=production
