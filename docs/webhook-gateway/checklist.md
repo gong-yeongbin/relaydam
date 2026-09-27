@@ -50,16 +50,16 @@ verify
 - [x] Prisma 도입 (`prisma` 7.10.0, `@prisma/client`, `@prisma/adapter-pg`), `prisma.config.ts`, 첫 마이그레이션(owner 부분 유니크 인덱스 포함)
 - [ ] `plan.md`의 데이터 모델을 `schema.prisma`로 작성
 - [x] `infra/prisma/*` — PrismaService·PrismaModule 작성 (`@prisma/adapter-pg`)
-- [ ] 시드 — organization(free 1개, team 1개), user + user_identity(google), organization_member(owner),
+- [x] 시드 — organization(free 1개, team 1개), user + user_identity(google), organization_member(owner),
       subscription(team 조직)
 - [ ] 설정·로그 모델(api_key, source, destination, connection, event, delivery, delivery_attempt) 설계
       검토 후 스키마에 추가, 시드에 source(프리셋 3종)·destination·connection 추가
-- [ ] 루트 `dev` 스크립트에 `db:deploy`/`db:generate`/`db:seed` 추가
+- [x] 루트 `dev` 스크립트에 `db:deploy`/`db:generate`/`db:seed` 추가
 - [ ] Dockerfile에 `prisma generate` + deploy 트리 재생성 단계 추가
 
 verify
 
-- [ ] `pnpm db:deploy && pnpm db:seed` 성공
+- [x] `pnpm db:deploy && pnpm db:seed` 성공 — 2회 실행해도 유저 1명(재실행 시 건너뜀)
 - [x] e2e 부팅 테스트 통과 — 실제 postgres로 통과, 닿지 않는 DB면 기동 실패(exit 1)
 
 ---

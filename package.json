@@ -3,7 +3,7 @@
 	"private": true,
 	"scripts": {
 		"build": "turbo run build",
-		"dev": "trap 'pnpm docker:down' EXIT; pnpm docker:up && pnpm db:deploy && pnpm db:generate && turbo run dev",
+		"dev": "trap 'pnpm docker:down' EXIT; pnpm docker:up && pnpm db:deploy && pnpm db:generate && pnpm db:seed && turbo run dev",
 		"lint": "turbo run lint",
 		"format": "prettier --write \"**/*.{ts,tsx,md}\"",
 		"check-types": "turbo run check-types",
@@ -12,7 +12,8 @@
 		"docker:down": "docker compose -f ./docker-compose.yml down -v",
 		"db:migrate": "pnpm --filter backend run migrate",
 		"db:deploy": "pnpm --filter backend run deploy",
-		"db:generate": "pnpm --filter backend run generate"
+		"db:generate": "pnpm --filter backend run generate",
+		"db:seed": "pnpm --filter backend run seed"
 	},
 	"devDependencies": {
 		"prettier": "^3.9.4",

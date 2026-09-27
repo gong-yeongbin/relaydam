@@ -15,7 +15,8 @@
 		"test:e2e": "vitest run --config vitest.e2e.config.mts",
 		"migrate": "prisma migrate dev --create-only",
 		"deploy": "prisma migrate deploy",
-		"generate": "prisma generate"
+		"generate": "prisma generate",
+		"seed": "prisma db seed"
 	},
 	"dependencies": {
 		"@nestjs/common": "11.2.5",
