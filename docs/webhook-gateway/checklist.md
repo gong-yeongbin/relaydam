@@ -49,7 +49,7 @@ verify
 
 - [x] Prisma 도입 (`prisma` 7.10.0, `@prisma/client`, `@prisma/adapter-pg`), `prisma.config.ts`, 첫 마이그레이션(owner 부분 유니크 인덱스 포함)
 - [ ] `plan.md`의 데이터 모델을 `schema.prisma`로 작성
-- [ ] `infra/prisma/*` 복사 (`monorepo-practice`)
+- [x] `infra/prisma/*` — PrismaService·PrismaModule 작성 (`@prisma/adapter-pg`)
 - [ ] 시드 — organization(free 1개, team 1개), user + user_identity(google), organization_member(owner),
       subscription(team 조직)
 - [ ] 설정·로그 모델(api_key, source, destination, connection, event, delivery, delivery_attempt) 설계
@@ -60,7 +60,7 @@ verify
 verify
 
 - [ ] `pnpm db:deploy && pnpm db:seed` 성공
-- [ ] e2e 부팅 테스트 통과
+- [x] e2e 부팅 테스트 통과 — 실제 postgres로 통과, 닿지 않는 DB면 기동 실패(exit 1)
 
 ---
 
@@ -83,7 +83,7 @@ verify
 ## 4. 전달 워커
 
 - [ ] `main.consumer.ts` + `APP_ROLE=consumer`, `start:consumer` 스크립트
-- [ ] Stream 컨슈머 그룹 등록 (`infra/stream/*` 복사, **최대 전달 초과 → dead로 교체**)
+- [ ] Stream 컨슈머 그룹 등록 (`infra/stream/*`, **최대 전달 초과 → dead**)
 - [ ] HTTP 포트 확장 — GET 전용 → POST·헤더·본문·응답 본문 반환
 - [ ] attempt 기록, 상태 전이
 - [ ] ZSET 지연 큐 + 5초 스케줄러

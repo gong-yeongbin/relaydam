@@ -337,3 +337,10 @@ Prisma가 이 인덱스를 drift로 보고 다음 마이그레이션에서 DROP�
 
 `prisma.config.ts`는 앱 루트에 있어 `tsconfig.build.json`의 `rootDir: ./src` 밖이다. build에서
 exclude하지 않으면 TS6059로 실패한다. `check-types`(tsconfig.json)에는 남겨 타입 검사는 받는다.
+
+## 드라이버 어댑터의 $connect()는 접속하지 않는다 (2026-09-27)
+
+Prisma 7 + `@prisma/adapter-pg`에서 `$connect()`는 DB가 없어도 성공한다. 처음엔 `onModuleInit`에서
+`$connect()`를 불렀는데, 닿지 않는 포트로 e2e를 돌려도 통과했다. 그래서 `SELECT 1`을 한 번 보낸다.
+DB에 닿지 못하면 첫 요청에서 500이 나는 대신 기동 단계에서 죽고, e2e 부팅 테스트가 DB 연결까지
+검증하게 된다. 확인: 잘못된 `DATABASE_URL`로 `pnpm test:e2e` → exit 1.
