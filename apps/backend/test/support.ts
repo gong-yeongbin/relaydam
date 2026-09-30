@@ -7,14 +7,18 @@ import type { ErrorBody } from '@/common/http/http-exception.filter';
 import { configureApp } from '@/common/configure-app';
 import { PrismaService } from '@/infra/prisma/prisma.service';
 import { GOOGLE_ID_TOKEN_VERIFIER, type GoogleIdTokenVerifier, type GoogleProfile } from '@/modules/auth/ports/google-id-token.verifier';
+import { type Mail, MAILER, type Mailer } from '@/modules/invitations/ports/mailer';
 
-// e2e 공통. 실제 구글 대신 'google:<key>' 토큰을 프로필로 바꿔 주는 fake로 AppModule을 띄운다.
+// e2e 공통. 실제 구글 대신 'google:<key>' 토큰을 프로필로 바꿔 주는 fake, 메일은 보낸 것을 모아 두는 fake로
+// AppModule을 띄운다.
 export type LoggedIn = { token: string; user_id: number; org_id: number; profile: GoogleProfile };
 
 export type TestApp = {
 	app: NestFastifyApplication;
 	prisma: PrismaService;
 	http: () => ReturnType<typeof request>;
+	// 보낸 메일. 초대 수락 토큰은 여기서 꺼낸다
+	mails: Mail[];
 	login: () => Promise<LoggedIn>;
 	close: () => Promise<void>;
 };
@@ -23,8 +27,15 @@ export async function createTestApp(): Promise<TestApp> {
 	const profiles = new Map<string, GoogleProfile>();
 	const fakeGoogle: GoogleIdTokenVerifier = { verify: (idToken) => Promise.resolve(profiles.get(idToken) ?? null) };
 	const emails: string[] = [];
+	const mails: Mail[] = [];
+	const fakeMailer: Mailer = { send: (mail) => Promise.resolve(void mails.push(mail)) };
 
-	const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(GOOGLE_ID_TOKEN_VERIFIER).useValue(fakeGoogle).compile();
+	const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+		.overrideProvider(GOOGLE_ID_TOKEN_VERIFIER)
+		.useValue(fakeGoogle)
+		.overrideProvider(MAILER)
+		.useValue(fakeMailer)
+		.compile();
 	const app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
 	configureApp(app);
 	await app.init();
@@ -48,6 +59,7 @@ export async function createTestApp(): Promise<TestApp> {
 		const userIds = users.map((u) => u.id);
 		const owned = await prisma.organization_member.findMany({ where: { user_id: { in: userIds }, role: 'owner' }, select: { organization_id: true } });
 		const orgIds = owned.map((o) => o.organization_id);
+		await prisma.invitation.deleteMany({ where: { OR: [{ invited_by_user_id: { in: userIds } }, { organization_id: { in: orgIds } }] } });
 		await prisma.organization_member.deleteMany({ where: { OR: [{ user_id: { in: userIds } }, { organization_id: { in: orgIds } }] } });
 		await prisma.organization.deleteMany({ where: { id: { in: orgIds } } });
 		await prisma.user_identity.deleteMany({ where: { user_id: { in: userIds } } });
@@ -55,7 +67,7 @@ export async function createTestApp(): Promise<TestApp> {
 		await app.close();
 	}
 
-	return { app, prisma, http: () => request(app.getHttpServer()), login, close };
+	return { app, prisma, http: () => request(app.getHttpServer()), mails, login, close };
 }
 
 // supertest의 body는 any다. 응답 형식을 타입으로 못 박는다

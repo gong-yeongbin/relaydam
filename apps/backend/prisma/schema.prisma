@@ -39,6 +39,12 @@ enum MemberRole {
   member
 }
 
+// 초대로 줄 수 있는 역할. owner는 조직당 1명이라 초대로 주지 않는다.
+enum InvitationRole {
+  admin
+  member
+}
+
 enum PaymentStatus {
   pending
   paid
@@ -56,6 +62,7 @@ model organization {
   updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
   members       organization_member[]
+  invitations   invitation[]
   subscription  subscription?
   usage_periods usage_period[]
 }
@@ -70,6 +77,7 @@ model user {
 
   identities  user_identity[]
   memberships organization_member[]
+  invitations invitation[]
 }
 
 model user_identity {
@@ -97,6 +105,24 @@ model organization_member {
 
   @@id([organization_id, user_id])
   @@index([user_id])
+}
+
+// 대기 중인 초대. 수락하면 행을 지운다. 같은 조직·이메일로 다시 초대하면 이 행의 토큰·만료를 바꾼다.
+// token_hash는 SHA-256 hex. 원문은 메일에만 있다.
+model invitation {
+  id                 Int            @id @default(autoincrement())
+  organization       organization   @relation(fields: [organization_id], references: [id])
+  organization_id    Int
+  email              String         @db.VarChar(255)
+  role               InvitationRole
+  token_hash         String         @unique @db.Char(64)
+  expires_at         DateTime       @db.Timestamptz(3)
+  invited_by         user           @relation(fields: [invited_by_user_id], references: [id])
+  invited_by_user_id Int
+  created_at         DateTime       @default(now()) @db.Timestamptz(3)
+  updated_at         DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@unique([organization_id, email])
 }
 
 // ─── 결제·사용량 ─────────────────────────────────────────────────────────

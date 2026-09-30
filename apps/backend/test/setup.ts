@@ -9,3 +9,5 @@ process.env.LOG_LEVEL ??= 'silent';
 process.env.DATABASE_URL ??= 'postgresql://postgres:1234@localhost:5432/relaydam';
 process.env.JWT_SECRET ??= 'test-jwt-secret';
 process.env.GOOGLE_CLIENT_ID ??= 'test-google-client-id';
+process.env.APP_URL ??= 'http://localhost:5173';
+process.env.MAIL_FROM ??= 'no-reply@relaydam.local';
