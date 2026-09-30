@@ -36,3 +36,6 @@ dist
 docs/webhook-gateway/plan.md
 docs/webhook-gateway/checklist.md
 docs/webhook-gateway/context-notes.md
+
+# IntelliJ HTTP Client 비밀 값 (id_token 등)
+http-client.private.env.json

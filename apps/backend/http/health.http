@@ -1,0 +1,2 @@
+### 헬스 체크
+GET {{baseUrl}}/health

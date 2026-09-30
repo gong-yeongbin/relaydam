@@ -117,6 +117,18 @@ RESTful하게 작성한다. 리소스는 URL, 행위는 HTTP 메서드로 표현
 - e2e에 반드시 있는 세 케이스. `@Public`·`@Roles` 없는 라우트 403, 타 조직(project 리소스면 타
   project) 리소스 404, 목록 커서로 두 페이지 순회 후 null.
 
+### .http
+
+- 엔드포인트를 추가·변경하면 같은 커밋에 `http/<컨트롤러 prefix>.http`도 고친다. IntelliJ HTTP Client 형식.
+- 요청마다 `### 한국어 한 줄` 제목. 호스트는 `{{baseUrl}}`, 인증은 `Authorization: Bearer {{token}}`.
+- `token`은 `auth.http`의 로그인 응답 핸들러가 전역 변수로 저장한다. 구글 `idToken`처럼 비밀인 값은
+  `http/http-client.private.env.json`(git 제외)에 `{ "local": { "idToken": "..." } }`로 넣는다.
+  공개 값만 `http-client.env.json`에 둔다.
+- 추가·변경한 `.http`는 서버를 띄우고 실제로 실행해 상태 코드·본문을 확인한다. CLI는
+  `docker run --rm -v "$PWD/http:/workdir" jetbrains/intellij-http-client --env-file http-client.env.json
+  --env local -V baseUrl=http://host.docker.internal:3001 -V token=<JWT> -L VERBOSE <파일>`.
+  구글 로그인 없이 확인할 때는 `.env`의 `JWT_SECRET`으로 시드 유저 JWT(`{ sub: '<user id>' }`)를 만들어 넘긴다.
+
 ## 함정
 
 - e2e에서 `await app.getHttpAdapter().getInstance().ready()`를 호출해야 Fastify 라우트가 뜬다.

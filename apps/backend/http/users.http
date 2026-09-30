@@ -1,0 +1,3 @@
+### 내 정보 조회 — auth.http로 먼저 로그인한다
+GET {{baseUrl}}/users/me
+Authorization: Bearer {{token}}
