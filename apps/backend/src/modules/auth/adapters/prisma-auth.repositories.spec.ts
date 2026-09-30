@@ -35,13 +35,13 @@ describe('Prisma auth 저장소 (통합)', () => {
 		const member = await prisma.organization_member.findFirstOrThrow({ where: { user_id: userId }, include: { organization: true } });
 		expect(member.role).toBe('owner');
 		expect(member.organization).toMatchObject({ plan: 'free', name: '테스트의 조직' });
-		expect(await memberships.findRole(member.organization_id, userId)).toBe('owner');
+		expect(await memberships.findAccess(member.organization_id, userId)).toEqual({ role: 'owner', plan: 'free', member_count: 1 });
 	});
 
 	it('없는 sub·이메일·membership은 null', async () => {
 		expect(await accounts.findUserIdByGoogleSub('sub-none')).toBeNull();
 		expect(await accounts.findUserIdByEmail('none@test.relaydam.local')).toBeNull();
-		expect(await memberships.findRole(2147483647, 2147483647)).toBeNull();
+		expect(await memberships.findAccess(2147483647, 2147483647)).toBeNull();
 	});
 
 	it('기존 유저에 구글 identity를 연결한다', async () => {

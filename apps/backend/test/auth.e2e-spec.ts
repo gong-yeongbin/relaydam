@@ -144,6 +144,8 @@ describe('auth (e2e)', () => {
 			expect(errorOf(other).code).toBe('organization_not_found');
 
 			const aliceUser = await prisma.user.findUniqueOrThrow({ where: { email: profiles.get(alice)!.email } });
+			// free는 멤버 1명 상한이라 2명이 되면 plan_limit이 먼저 걸린다. role 검사만 보려고 team으로 올린다
+			await prisma.organization.update({ where: { id: bobOrg }, data: { plan: 'team' } });
 			await prisma.organization_member.create({ data: { organization_id: bobOrg, user_id: aliceUser.id, role: 'member' } });
 			const member = await request(app.getHttpServer()).get(`/e2e-probe/orgs/${bobOrg}`).set('Authorization', `Bearer ${aliceToken}`).expect(403);
 			expect(errorOf(member).code).toBe('forbidden');

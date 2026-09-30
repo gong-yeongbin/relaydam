@@ -61,9 +61,10 @@ RESTful하게 작성한다. 리소스는 URL, 행위는 HTTP 메서드로 표현
   불일치는 404. role은 조직 단위뿐이라 project별 권한 검사는 없다.
 - 목록·단건 조회는 항상 소속 조건(조직 리소스는 `organization_id`, project 리소스는 `project_id`)을
   건다. id만으로 조회하지 않는다.
-- 플랜 게이트는 가드가 아니라 service에서 403 `plan_limit`. 초대는 멤버 상한(team 10명, team_plus
-  무제한) 안에서만, 멤버 수가 상한을 넘는 조직은 owner만 접근, project 생성은 project 상한(free 1,
-  personal 3, team 10, team_plus 30) 안에서만, 이벤트 상한은 인그레스 429 `usage_exceeded`.
+- 플랜 게이트는 가드가 아니라 service에서 403 `plan_limit`. 예외로 "멤버 수가 상한을 넘는 조직은 owner만
+  접근"만 `:orgId` 가드가 본다. 초대는 멤버 상한(team 10명, team_plus 무제한) 안에서만, project 생성은
+  project 상한(free 1, personal 3, team 10, team_plus 30) 안에서만, 이벤트 상한은 인그레스 429
+  `usage_exceeded`. 플랜별 값은 `src/common/plan-limits.ts`.
 
 ### 요청
 

@@ -8,7 +8,7 @@ export class OrgService {
 	constructor(@Inject(ORG_REPOSITORY) private readonly orgs: OrgRepository) {}
 
 	async list(userId: number, query: ListQueryDto): Promise<Page<OrgWithRole>> {
-		return toPage(await this.orgs.listByMember(userId, query.cursor ?? null, query.limit + 1), query.limit);
+		return toPage(await this.orgs.listByMember(userId, query.cursor ?? null, query.limit + 1), query.limit, (o) => o.id);
 	}
 
 	async get(orgId: number): Promise<organization> {

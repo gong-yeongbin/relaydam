@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, ForbiddenException, Inject, Injectable, 
 import { Reflector } from '@nestjs/core';
 import type { MemberRole } from '@prisma/client';
 import { IS_PUBLIC, ROLES, type RequestWithActor } from '@/common/auth/decorators';
+import { exceedsMemberLimit } from '@/common/plan-limits';
 import { satisfiesRole } from './domain/role';
 import { MEMBERSHIP_REPOSITORY, type MembershipRepository } from './ports/membership.repository';
 import { TOKEN_ISSUER, type TokenIssuer } from './ports/token.issuer';
@@ -39,8 +40,13 @@ export class AuthGuard implements CanActivate {
 		// 숫자가 아닌 :orgId, 미소속 조직 모두 404. 존재 여부를 노출하지 않는다.
 		const orgId = Number(request.params.orgId);
 		if (!Number.isSafeInteger(orgId) || orgId <= 0) throw new NotFoundException(ORG_NOT_FOUND);
-		const role = await this.memberships.findRole(orgId, userId);
-		if (!role) throw new NotFoundException(ORG_NOT_FOUND);
+		const access = await this.memberships.findAccess(orgId, userId);
+		if (!access) throw new NotFoundException(ORG_NOT_FOUND);
+		const { role } = access;
+		// 플랜 게이트 중 이것만 가드에 둔다. 조직의 모든 라우트에 걸려야 해서다. 근거는 context-notes.md "API 형식"
+		if (role !== 'owner' && exceedsMemberLimit(access.plan, access.member_count)) {
+			throw new ForbiddenException({ code: 'plan_limit', message: '멤버 수가 플랜 상한을 넘어 owner만 접근할 수 있습니다.' });
+		}
 		if (!satisfiesRole(role, required)) throw new ForbiddenException({ code: 'forbidden', message: '권한이 없습니다.' });
 
 		request.actor = { kind: 'user', user_id: userId, org_id: orgId, role };

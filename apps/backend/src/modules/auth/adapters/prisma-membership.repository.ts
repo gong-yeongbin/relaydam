@@ -1,17 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import type { MemberRole } from '@prisma/client';
 import { PrismaService } from '@/infra/prisma/prisma.service';
-import type { MembershipRepository } from '../ports/membership.repository';
+import type { MembershipRepository, OrgAccess } from '../ports/membership.repository';
 
 @Injectable()
 export class PrismaMembershipRepository implements MembershipRepository {
 	constructor(private readonly prisma: PrismaService) {}
 
-	async findRole(organizationId: number, userId: number): Promise<MemberRole | null> {
+	async findAccess(organizationId: number, userId: number): Promise<OrgAccess | null> {
 		const member = await this.prisma.organization_member.findUnique({
 			where: { organization_id_user_id: { organization_id: organizationId, user_id: userId } },
-			select: { role: true },
+			select: { role: true, organization: { select: { plan: true, _count: { select: { members: true } } } } },
 		});
-		return member?.role ?? null;
+		if (!member) return null;
+		return { role: member.role, plan: member.organization.plan, member_count: member.organization._count.members };
 	}
 }

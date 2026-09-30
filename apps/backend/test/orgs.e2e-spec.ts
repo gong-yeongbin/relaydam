@@ -10,7 +10,8 @@ describe('orgs (e2e)', () => {
 	beforeAll(async () => {
 		t = await createTestApp();
 		[alice, bob, carol] = [await t.login(), await t.login(), await t.login()];
-		// alice는 개인 조직(owner) + bob 조직(admin) + carol 조직(member)
+		// alice는 개인 조직(owner) + bob 조직(admin) + carol 조직(member). free는 멤버 1명 상한이라 team으로 올린다
+		await t.prisma.organization.updateMany({ where: { id: { in: [bob.org_id, carol.org_id] } }, data: { plan: 'team' } });
 		await t.prisma.organization_member.createMany({
 			data: [
 				{ organization_id: bob.org_id, user_id: alice.user_id, role: 'admin' },
@@ -45,7 +46,7 @@ describe('orgs (e2e)', () => {
 	describe('GET /orgs/:orgId', () => {
 		it('소속 조직은 행을, 타 조직은 404', async () => {
 			const own = await t.http().get(`/orgs/${carol.org_id}`).set(auth(alice)).expect(200);
-			expect(own.body).toMatchObject({ id: carol.org_id, plan: 'free' });
+			expect(own.body).toMatchObject({ id: carol.org_id, plan: 'team' });
 
 			const other = await t.http().get(`/orgs/${alice.org_id}`).set(auth(bob)).expect(404);
 			expect(errorOf(other).code).toBe('organization_not_found');

@@ -22,8 +22,9 @@ export class ListQueryDto {
 export type Page<T> = { data: T[]; next_cursor: string | null };
 
 // 저장소는 limit + 1개를 읽어 넘긴다. 한 개가 더 있으면 다음 페이지가 있다는 뜻이다.
-export function toPage<T extends { id: number | bigint }>(rows: T[], limit: number): Page<T> {
+// cursorOf는 정렬 키. 보통 id, 복합 PK 테이블(organization_member)은 user_id
+export function toPage<T>(rows: T[], limit: number, cursorOf: (row: T) => number | bigint): Page<T> {
 	const last = rows.length > limit ? rows[limit - 1] : undefined;
-	if (!last) return { data: rows, next_cursor: null };
-	return { data: rows.slice(0, limit), next_cursor: String(last.id) };
+	if (last === undefined) return { data: rows, next_cursor: null };
+	return { data: rows.slice(0, limit), next_cursor: String(cursorOf(last)) };
 }

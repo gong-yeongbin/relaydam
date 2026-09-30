@@ -29,11 +29,15 @@ describe('toPage', () => {
 	const rows = [{ id: 5 }, { id: 4 }, { id: 3 }];
 
 	it('limit + 1개를 받았으면 limit개만 내고 마지막 id를 커서로 준다', () => {
-		expect(toPage(rows, 2)).toEqual({ data: [{ id: 5 }, { id: 4 }], next_cursor: '4' });
+		expect(toPage(rows, 2, (r) => r.id)).toEqual({ data: [{ id: 5 }, { id: 4 }], next_cursor: '4' });
 	});
 
 	it('limit개 이하면 다음 페이지가 없다', () => {
-		expect(toPage(rows, 3)).toEqual({ data: rows, next_cursor: null });
-		expect(toPage([], 3)).toEqual({ data: [], next_cursor: null });
+		expect(toPage(rows, 3, (r) => r.id)).toEqual({ data: rows, next_cursor: null });
+		expect(toPage([] as { id: number }[], 3, (r) => r.id)).toEqual({ data: [], next_cursor: null });
+	});
+
+	it('cursorOf로 id가 아닌 키를 커서로 쓴다', () => {
+		expect(toPage([{ user_id: 9 }, { user_id: 8 }], 1, (r) => r.user_id).next_cursor).toBe('9');
 	});
 });
