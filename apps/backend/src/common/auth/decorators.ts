@@ -14,7 +14,7 @@ export type RequestWithActor = { actor?: Actor };
 export const Public = () => SetMetadata(IS_PUBLIC, true);
 
 // 로그인이 필요한 라우트. 인자가 있으면 :orgId의 membership role이 그 이상이어야 한다(owner ⊃ admin ⊃ member).
-// 인자가 없으면 로그인만 본다(/me처럼 조직과 무관한 라우트).
+// 인자가 없으면 로그인만 본다(/users/me처럼 조직과 무관한 라우트).
 export const Roles = (...roles: MemberRole[]) => SetMetadata(ROLES, roles);
 
 export function actorFromContext(ctx: ExecutionContext): Actor {
