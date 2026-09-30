@@ -59,6 +59,7 @@ export async function createTestApp(): Promise<TestApp> {
 		const userIds = users.map((u) => u.id);
 		const owned = await prisma.organization_member.findMany({ where: { user_id: { in: userIds }, role: 'owner' }, select: { organization_id: true } });
 		const orgIds = owned.map((o) => o.organization_id);
+		await prisma.project.deleteMany({ where: { organization_id: { in: orgIds } } });
 		await prisma.invitation.deleteMany({ where: { OR: [{ invited_by_user_id: { in: userIds } }, { organization_id: { in: orgIds } }] } });
 		await prisma.organization_member.deleteMany({ where: { OR: [{ user_id: { in: userIds } }, { organization_id: { in: orgIds } }] } });
 		await prisma.organization.deleteMany({ where: { id: { in: orgIds } } });

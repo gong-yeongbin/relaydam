@@ -14,9 +14,11 @@ class Routes {
 	loggedIn() {}
 	@Roles('admin')
 	adminOnly() {}
+	@Roles('member')
+	projectRoute() {}
 }
 
-type Request = { headers: { authorization?: string }; params: { orgId?: string }; actor?: Actor };
+type Request = { headers: { authorization?: string }; params: { orgId?: string; projectId?: string }; actor?: Actor };
 
 function contextFor(handler: keyof Routes, request: Request): ExecutionContext {
 	return {
@@ -41,17 +43,19 @@ const orgs = new Map<number, { plan: Plan; member_count: number }>([
 	[1, { plan: 'free', member_count: 1 }],
 	[3, { plan: 'free', member_count: 2 }],
 ]);
+// project 20은 조직 1 소속
 const memberships: MembershipRepository = {
 	findAccess: (orgId, userId) => {
 		const role = roles.get(`${orgId}:${userId}`);
 		return Promise.resolve(role ? { role, ...orgs.get(orgId)! } : null);
 	},
+	projectInOrg: (projectId, orgId) => Promise.resolve(projectId === 20 && orgId === 1),
 };
 
 const guard = new AuthGuard(new Reflector(), tokens, memberships);
 
-function request(token: string | null, orgId?: string): Request {
-	return { headers: token ? { authorization: `Bearer ${token}` } : {}, params: { orgId } };
+function request(token: string | null, orgId?: string, projectId?: string): Request {
+	return { headers: token ? { authorization: `Bearer ${token}` } : {}, params: { orgId, projectId } };
 }
 
 describe('AuthGuard', () => {
@@ -92,6 +96,16 @@ describe('AuthGuard', () => {
 		const error = await guard.canActivate(contextFor('adminOnly', request('valid-11', '3'))).catch((e: unknown) => e);
 		expect(error).toBeInstanceOf(ForbiddenException);
 		expect((error as ForbiddenException).getResponse()).toMatchObject({ code: 'plan_limit' });
+	});
+
+	it(':projectId가 있으면 그 조직의 project여야 한다. 타 조직·없는·숫자 아닌 projectId는 404 project_not_found', async () => {
+		expect(await guard.canActivate(contextFor('projectRoute', request('valid-11', '1', '20')))).toBe(true);
+
+		for (const projectId of ['21', 'abc']) {
+			const error = await guard.canActivate(contextFor('projectRoute', request('valid-11', '1', projectId))).catch((e: unknown) => e);
+			expect(error).toBeInstanceOf(NotFoundException);
+			expect((error as NotFoundException).getResponse()).toMatchObject({ code: 'project_not_found' });
+		}
 	});
 
 	it('미소속 조직, 숫자가 아닌 orgId, orgId 없음은 404', async () => {

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import type { InvitationRole, invitation, organization_member } from '@prisma/client';
+import type { invitation, organization_member } from '@prisma/client';
 import { PrismaService } from '@/infra/prisma/prisma.service';
-import type { InvitationRepository, InvitationView, InviteContext } from '../ports/invitation.repository';
+import type { InvitationRepository, InvitationView, InviteContext, InviteInput } from '../ports/invitation.repository';
 
 // token_hash는 응답에 나가지 않도록 애초에 읽지 않는다
 const VIEW = { id: true, organization_id: true, email: true, role: true, expires_at: true, invited_by_user_id: true, created_at: true, updated_at: true } as const;
@@ -10,23 +10,26 @@ const VIEW = { id: true, organization_id: true, email: true, role: true, expires
 export class PrismaInvitationRepository implements InvitationRepository {
 	constructor(private readonly prisma: PrismaService) {}
 
-	async inviteContext(orgId: number, email: string, inviterId: number, now: Date): Promise<InviteContext> {
-		const [org, pending, existing, inviter] = await Promise.all([
-			this.prisma.organization.findUniqueOrThrow({ where: { id: orgId }, select: { name: true, plan: true, _count: { select: { members: true } } } }),
-			this.prisma.invitation.count({ where: { organization_id: orgId, email: { not: email }, expires_at: { gt: now } } }),
-			this.prisma.organization_member.findFirst({ where: { organization_id: orgId, user: { email: { equals: email, mode: 'insensitive' } } }, select: { user_id: true } }),
-			this.prisma.user.findUniqueOrThrow({ where: { id: inviterId }, select: { name: true } }),
-		]);
-		return { org_name: org.name, plan: org.plan, member_count: org._count.members, pending_count: pending, already_member: existing !== null, inviter_name: inviter.name };
-	}
-
-	upsert(data: { organization_id: number; email: string; role: InvitationRole; token_hash: string; expires_at: Date; invited_by_user_id: number }): Promise<InvitationView> {
-		const { organization_id, email, ...rest } = data;
-		return this.prisma.invitation.upsert({
-			where: { organization_id_email: { organization_id, email } },
-			create: data,
-			update: rest,
-			select: VIEW,
+	invite(data: InviteInput, now: Date, check: (ctx: InviteContext) => void): Promise<{ invitation: InvitationView; ctx: InviteContext }> {
+		const { organization_id: orgId, email, invited_by_user_id: inviterId, ...rest } = data;
+		return this.prisma.$transaction(async (tx) => {
+			// project 생성과 같은 잠금이다. 센 뒤 만들기 전에 같은 조직의 다른 요청이 끼어들지 못한다
+			await tx.$queryRaw`SELECT id FROM organization WHERE id = ${orgId} FOR UPDATE`;
+			const [org, pending, existing, inviter] = await Promise.all([
+				tx.organization.findUniqueOrThrow({ where: { id: orgId }, select: { name: true, plan: true, _count: { select: { members: true } } } }),
+				tx.invitation.count({ where: { organization_id: orgId, email: { not: email }, expires_at: { gt: now } } }),
+				tx.organization_member.findFirst({ where: { organization_id: orgId, user: { email: { equals: email, mode: 'insensitive' } } }, select: { user_id: true } }),
+				tx.user.findUniqueOrThrow({ where: { id: inviterId }, select: { name: true } }),
+			]);
+			const ctx = { org_name: org.name, plan: org.plan, member_count: org._count.members, pending_count: pending, already_member: existing !== null, inviter_name: inviter.name };
+			check(ctx);
+			const invitation = await tx.invitation.upsert({
+				where: { organization_id_email: { organization_id: orgId, email } },
+				create: data,
+				update: { ...rest, invited_by_user_id: inviterId },
+				select: VIEW,
+			});
+			return { invitation, ctx };
 		});
 	}
 

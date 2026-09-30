@@ -63,6 +63,7 @@ model organization {
 
   members       organization_member[]
   invitations   invitation[]
+  projects      project[]
   subscription  subscription?
   usage_periods usage_period[]
 }
@@ -105,6 +106,23 @@ model organization_member {
 
   @@id([organization_id, user_id])
   @@index([user_id])
+}
+
+// 조직 아래 작업 단위. 소스·목적지·이벤트·api_key가 여기에 속한다(6단계 이후).
+// 같은 조직 안에서 이름은 대소문자를 무시하고 유일하다. 마이그레이션 SQL의 식 인덱스로 강제한다.
+// CREATE UNIQUE INDEX project_organization_id_lower_name_key ON project (organization_id, lower(name));
+// suspended_at은 결제 실패로 plan이 내려가 project 수가 상한을 넘었을 때 채운다(4. billing). 정지 중에는
+// 수신·전달을 멈추고 데이터만 보관한다.
+model project {
+  id              Int          @id @default(autoincrement())
+  organization    organization @relation(fields: [organization_id], references: [id])
+  organization_id Int
+  name            String       @db.VarChar(100)
+  suspended_at    DateTime?    @db.Timestamptz(3)
+  created_at      DateTime     @default(now()) @db.Timestamptz(3)
+  updated_at      DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@index([organization_id])
 }
 
 // 대기 중인 초대. 수락하면 행을 지운다. 같은 조직·이메일로 다시 초대하면 이 행의 토큰·만료를 바꾼다.

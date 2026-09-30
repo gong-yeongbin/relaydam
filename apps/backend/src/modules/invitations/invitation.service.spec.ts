@@ -3,7 +3,7 @@ import type { invitation, organization_member, Plan } from '@prisma/client';
 import type { Actor } from '@/common/auth/decorators';
 import { hashInvitationToken } from './domain/invitation';
 import { InvitationService } from './invitation.service';
-import type { InvitationRepository, InvitationView, InviteContext } from './ports/invitation.repository';
+import type { InvitationRepository, InvitationView, InviteContext, InviteInput } from './ports/invitation.repository';
 import type { Mail, Mailer } from './ports/mailer';
 
 const ORG = 1;
@@ -16,24 +16,22 @@ class FakeInvitations implements InvitationRepository {
 	rows: invitation[] = [];
 	nextId = 1;
 
-	inviteContext(_orgId: number, email: string, _inviterId: number, now: Date): Promise<InviteContext> {
-		const pending = this.rows.filter((r) => r.email !== email && r.expires_at > now).length;
-		return Promise.resolve({
+	invite(data: InviteInput, now: Date, check: (ctx: InviteContext) => void) {
+		const ctx: InviteContext = {
 			org_name: '결제팀',
 			plan: this.plan,
 			member_count: this.members.size,
-			pending_count: pending,
-			already_member: [...this.members.values()].includes(email),
+			pending_count: this.rows.filter((r) => r.email !== data.email && r.expires_at > now).length,
+			already_member: [...this.members.values()].includes(data.email),
 			inviter_name: '홍길동',
-		});
-	}
-	upsert(data: Omit<invitation, 'id' | 'created_at' | 'updated_at'>): Promise<InvitationView> {
+		};
+		check(ctx);
 		const existing = this.rows.find((r) => r.email === data.email);
 		const row = { ...(existing ?? { id: this.nextId++, created_at: new Date(0) }), ...data, updated_at: new Date(0) };
 		this.rows = [...this.rows.filter((r) => r !== existing), row];
 		const view: Partial<invitation> = { ...row };
 		delete view.token_hash;
-		return Promise.resolve(view as InvitationView);
+		return Promise.resolve({ invitation: view as InvitationView, ctx });
 	}
 	list(_orgId: number, cursor: number | null, take: number) {
 		const rows = this.rows.filter((r) => cursor === null || r.id < cursor).sort((a, b) => b.id - a.id);

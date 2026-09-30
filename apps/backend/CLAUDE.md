@@ -65,6 +65,8 @@ RESTful하게 작성한다. 리소스는 URL, 행위는 HTTP 메서드로 표현
   접근"만 `:orgId` 가드가 본다. 초대는 멤버 상한(team 10명, team_plus 무제한) 안에서만, project 생성은
   project 상한(free 1, personal 3, team 10, team_plus 30) 안에서만, 이벤트 상한은 인그레스 429
   `usage_exceeded`. 플랜별 값은 `src/common/plan-limits.ts`.
+- "세고 → 비교하고 → 만드는" 상한 검사는 조직 행을 `FOR UPDATE`로 잠근 트랜잭션 안에서 tx 클라이언트로만
+  한다. 규칙은 service가 check 함수로 넘기고 adapter가 잠근 상태로 부른다(`project`·`invitation` adapter).
 
 ### 요청
 

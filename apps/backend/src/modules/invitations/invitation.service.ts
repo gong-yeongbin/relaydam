@@ -21,22 +21,15 @@ export class InvitationService {
 	async create(actor: Actor, orgId: number, input: { email: string; role: 'admin' | 'member' }): Promise<InvitationView> {
 		const email = input.email.toLowerCase();
 		const now = new Date();
-		const ctx = await this.invitations.inviteContext(orgId, email, actor.user_id, now);
-		if (ctx.already_member) throw new ConflictException({ code: 'member_conflict', message: '이미 조직 멤버입니다.' });
-		// 대기 중인 초대도 자리를 차지한다. 초대를 쌓아 두고 수락시켜 상한을 넘는 것을 막는다
-		if (exceedsMemberLimit(ctx.plan, ctx.member_count + ctx.pending_count + 1)) {
-			throw new ForbiddenException({ code: 'plan_limit', message: '멤버와 대기 중인 초대 수가 플랜 상한에 도달했습니다.' });
-		}
-
 		const token = randomBytes(32).toString('base64url');
 		const expires_at = invitationExpiresAt(now);
-		const invitation = await this.invitations.upsert({
-			organization_id: orgId,
-			email,
-			role: input.role,
-			token_hash: hashInvitationToken(token),
-			expires_at,
-			invited_by_user_id: actor.user_id,
+		const data = { organization_id: orgId, email, role: input.role, token_hash: hashInvitationToken(token), expires_at, invited_by_user_id: actor.user_id };
+		const { invitation, ctx } = await this.invitations.invite(data, now, (ctx) => {
+			if (ctx.already_member) throw new ConflictException({ code: 'member_conflict', message: '이미 조직 멤버입니다.' });
+			// 대기 중인 초대도 자리를 차지한다. 초대를 쌓아 두고 수락시켜 상한을 넘는 것을 막는다
+			if (exceedsMemberLimit(ctx.plan, ctx.member_count + ctx.pending_count + 1)) {
+				throw new ForbiddenException({ code: 'plan_limit', message: '멤버와 대기 중인 초대 수가 플랜 상한에 도달했습니다.' });
+			}
 		});
 		// 발송이 실패하면 초대 행은 남는다. 같은 이메일로 다시 초대하면 새 토큰으로 재발송된다
 		await this.mailer.send({

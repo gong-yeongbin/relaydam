@@ -14,4 +14,8 @@ export class PrismaMembershipRepository implements MembershipRepository {
 		if (!member) return null;
 		return { role: member.role, plan: member.organization.plan, member_count: member.organization._count.members };
 	}
+
+	async projectInOrg(projectId: number, organizationId: number): Promise<boolean> {
+		return (await this.prisma.project.count({ where: { id: projectId, organization_id: organizationId } })) > 0;
+	}
 }

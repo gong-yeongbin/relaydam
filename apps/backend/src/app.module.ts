@@ -7,6 +7,7 @@ import { HealthModule } from './modules/health/health.module';
 import { InvitationModule } from './modules/invitations/invitation.module';
 import { MemberModule } from './modules/members/member.module';
 import { OrgModule } from './modules/orgs/org.module';
+import { ProjectModule } from './modules/projects/project.module';
 import { UserModule } from './modules/users/user.module';
 
 @Module({
@@ -32,6 +33,7 @@ import { UserModule } from './modules/users/user.module';
 		OrgModule,
 		MemberModule,
 		InvitationModule,
+		ProjectModule,
 	],
 })
 export class AppModule {}
