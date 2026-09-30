@@ -124,6 +124,8 @@ RESTful하게 작성한다. 리소스는 URL, 행위는 HTTP 메서드로 표현
 - `token`은 `auth.http`의 로그인 응답 핸들러가 전역 변수로 저장한다. 구글 `idToken`처럼 비밀인 값은
   `http/http-client.private.env.json`(git 제외)에 `{ "local": { "idToken": "..." } }`로 넣는다.
   공개 값만 `http-client.env.json`에 둔다.
+- 경로의 id(`orgId` 등)는 같은 파일 첫 요청(목록)의 응답 핸들러가 전역 변수로 저장한다. 파일 사이 의존은
+  `token`뿐이고, id를 env 파일에 고정하지 않는다(autoincrement라 DB마다 다르다).
 - 추가·변경한 `.http`는 서버를 띄우고 실제로 실행해 상태 코드·본문을 확인한다. CLI는
   `docker run --rm -v "$PWD/http:/workdir" jetbrains/intellij-http-client --env-file http-client.env.json
   --env local -V baseUrl=http://host.docker.internal:3001 -V token=<JWT> -L VERBOSE <파일>`.
