@@ -38,9 +38,10 @@ RESTful하게 작성한다. 리소스는 URL, 행위는 HTTP 메서드로 표현
 
 ### URL
 
-- 관리 API는 `/orgs/:orgId/<복수 명사>`. `sources`, `destinations`, `connections`, `members`,
-  `api-keys`, `events`, `deliveries`, `subscription`(조직당 1개라 단수). 여러 단어는 kebab-case.
-- 예외는 넷. 인그레스 `/in/:sourceSlug`, `/auth/*`, `/me`(내 정보·내 조직 목록), `/health`.
+- 관리 API는 두 단계. 조직 리소스는 `/orgs/:orgId/<복수 명사>`(`members`, `projects`,
+  `subscription`(조직당 1개라 단수)), project 리소스는 `/orgs/:orgId/projects/:projectId/<복수 명사>`
+  (`sources`, `destinations`, `connections`, `api-keys`, `events`, `deliveries`). 여러 단어는 kebab-case.
+- 예외는 넷. 인그레스 `/in/:sourceSlug`, `/auth/*`, `/users/me`(내 정보·내 조직 목록), `/health`.
 - URL에 동사를 쓰지 않는다. 상태를 바꾸는 액션만 `POST .../:id/<동사>`. 예: `deliveries/:id/retry`,
   `events/:id/replay`, `subscription/cancel`.
 - GET 목록·단건, POST 생성(201), PATCH 부분 수정(200), DELETE 삭제(204). PUT은 쓰지 않는다.
@@ -50,16 +51,19 @@ RESTful하게 작성한다. 리소스는 URL, 행위는 HTTP 메서드로 표현
 
 - 전역 가드 deny-by-default. 모든 라우트에 `@Public()` 또는 `@Roles(...)` 중 하나가 있어야 한다.
   둘 다 없으면 가드가 403을 낸다. `/health`도 `@Public()`이 필요하다.
-- 주체는 둘. JWT(user + membership role)와 api_key(조직 고정). 핸들러는 `@Actor()`로 받는다.
-  `{ kind: 'user', user_id, org_id, role } | { kind: 'api_key', org_id, api_key_id }`.
+- 주체는 둘. JWT(user + membership role)와 api_key(project 고정). 핸들러는 `@Actor()`로 받는다.
+  `{ kind: 'user', user_id, org_id, role } | { kind: 'api_key', org_id, project_id, api_key_id }`.
 - `@Roles`는 membership role 기준이고 `owner ⊃ admin ⊃ member`. api_key는 member로 취급한다.
   멤버·결제·API 키 관리는 `@Roles('admin')` 이상이라 api_key로는 호출할 수 없다.
-- `:orgId` 가드가 JWT의 membership 또는 api_key의 organization_id와 대조한다. 미소속·불일치는
-  **404**. 타 조직 리소스 id도 404. 403은 "소속은 맞지만 role·플랜이 부족"일 때만.
-- 목록·단건 조회는 항상 `organization_id` 조건을 건다. id만으로 조회하지 않는다.
+- `:orgId` 가드가 JWT의 membership 또는 api_key가 속한 project의 organization_id와 대조한다.
+  미소속·불일치는 **404**. 타 조직 리소스 id도 404. 403은 "소속은 맞지만 role·플랜이 부족"일 때만.
+- `:projectId` 가드가 project의 organization_id를 `:orgId`와, api_key면 키의 project_id와 대조한다.
+  불일치는 404. role은 조직 단위뿐이라 project별 권한 검사는 없다.
+- 목록·단건 조회는 항상 소속 조건(조직 리소스는 `organization_id`, project 리소스는 `project_id`)을
+  건다. id만으로 조회하지 않는다.
 - 플랜 게이트는 가드가 아니라 service에서 403 `plan_limit`. 초대는 멤버 상한(team 10명, team_plus
-  무제한) 안에서만, 멤버 수가 상한을 넘는 조직은 owner만 접근, 이벤트 상한은 인그레스 429
-  `usage_exceeded`.
+  무제한) 안에서만, 멤버 수가 상한을 넘는 조직은 owner만 접근, project 생성은 project 상한(free 1,
+  personal 3, team 10, team_plus 30) 안에서만, 이벤트 상한은 인그레스 429 `usage_exceeded`.
 
 ### 요청
 
@@ -110,8 +114,8 @@ RESTful하게 작성한다. 리소스는 URL, 행위는 HTTP 메서드로 표현
 ### 테스트
 
 - 컨트롤러 유닛은 service를 fake로 두고 상태 코드·응답 형식만 본다.
-- e2e에 반드시 있는 세 케이스. `@Public`·`@Roles` 없는 라우트 403, 타 조직 리소스 404, 목록
-  커서로 두 페이지 순회 후 null.
+- e2e에 반드시 있는 세 케이스. `@Public`·`@Roles` 없는 라우트 403, 타 조직(project 리소스면 타
+  project) 리소스 404, 목록 커서로 두 페이지 순회 후 null.
 
 ## 함정
 
