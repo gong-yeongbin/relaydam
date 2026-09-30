@@ -33,6 +33,7 @@ API·워커 서버. NestJS 11 + Fastify + Prisma/PostgreSQL + Valkey(ioredis). �
 
 ## 엔드포인트
 
+RESTful하게 작성한다. 리소스는 URL, 행위는 HTTP 메서드로 표현한다. 아래 규칙이 그 구체화다.
 근거는 `context-notes.md` "API 형식" 절. 여기 없는 형식을 새로 만들지 않는다.
 
 ### URL
