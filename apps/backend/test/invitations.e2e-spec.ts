@@ -80,13 +80,10 @@ describe('invitations (e2e)', () => {
 		expect(errorOf(response).code).toBe('plan_limit');
 	});
 
-	it('team 조직은 멤버 + 대기 초대가 10이면 11번째 초대 403', async () => {
+	it('유료 조직은 멤버 상한이 없어 11번째 초대도 201', async () => {
 		const lead = await t.login();
 		await t.prisma.organization.update({ where: { id: lead.org_id }, data: { plan: 'team' } });
 		const path = `/orgs/${lead.org_id}/invitations`;
-		for (let i = 0; i < 9; i++) await t.http().post(path).set(auth(lead)).send({ email: `${randomUUID()}@test.relaydam.local`, role: 'member' }).expect(201);
-
-		const response = await t.http().post(path).set(auth(lead)).send({ email: `${randomUUID()}@test.relaydam.local`, role: 'member' }).expect(403);
-		expect(errorOf(response).code).toBe('plan_limit');
+		for (let i = 0; i < 11; i++) await t.http().post(path).set(auth(lead)).send({ email: `${randomUUID()}@test.relaydam.local`, role: 'member' }).expect(201);
 	});
 });

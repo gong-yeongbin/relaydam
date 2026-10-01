@@ -11,16 +11,14 @@ datasource db {
 
 enum Plan {
   free
-  personal
   team
-  team_plus
+  business
 }
 
 // subscription에는 free가 없다. free 조직은 subscription 행이 없다.
 enum SubscriptionPlan {
-  personal
   team
-  team_plus
+  business
 }
 
 enum SubscriptionStatus {

@@ -126,11 +126,9 @@ describe('InvitationService', () => {
 				body: expect.objectContaining({ code: 'plan_limit' }) as object,
 			});
 
+			// 유료는 상한이 없다
 			repo.plan = 'team';
-			for (let i = 0; i < 9; i++) await service.create(admin, ORG, { email: `u${i}@example.com`, role: 'member' });
-			expect((await errorOf(service.create(admin, ORG, { email: 'u9@example.com', role: 'member' }))).body.code).toBe('plan_limit');
-			// 이미 대기 중인 이메일의 재초대는 자리를 새로 차지하지 않는다
-			await service.create(admin, ORG, { email: 'u0@example.com', role: 'member' });
+			for (let i = 0; i < 11; i++) await service.create(admin, ORG, { email: `u${i}@example.com`, role: 'member' });
 		});
 	});
 

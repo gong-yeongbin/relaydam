@@ -22,7 +22,7 @@ export class ProjectController {
 
 	@Roles('admin')
 	@Post()
-	@ApiOperation({ summary: '프로젝트를 만든다. 플랜별 개수 상한(free 1, personal 3, team 10, team_plus 30)' })
+	@ApiOperation({ summary: '프로젝트를 만든다. 플랜별 개수 상한(free 1, 유료 무제한)' })
 	@ApiResponse({ status: 201, type: ProjectDto })
 	@ApiResponse({ status: 400, description: 'validation_failed' })
 	@ApiResponse({ status: 403, description: 'forbidden — admin 미만 / plan_limit — 개수 상한' })

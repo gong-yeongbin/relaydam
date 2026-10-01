@@ -7,7 +7,7 @@ const ORG = 1;
 
 // port를 in-memory fake로 둔다. 근거는 context-notes.md "계층별 테스트".
 class FakeProjects implements ProjectRepository {
-	plan: Plan = 'personal';
+	plan: Plan = 'team';
 	rows: project[] = [];
 	nextId = 1;
 
@@ -56,16 +56,15 @@ describe('ProjectService', () => {
 		service = new ProjectService(repo);
 	});
 
-	it('create — 플랜 상한 안에서 만들고, 넘으면 403 plan_limit (personal 3개)', async () => {
-		for (const name of ['a', 'b', 'c']) expect(await service.create(ORG, { name })).toMatchObject({ organization_id: ORG, name, suspended_at: null });
-		expect(await errorOf(service.create(ORG, { name: 'd' }))).toEqual({ type: ForbiddenException, code: 'plan_limit' });
-		expect(repo.rows).toHaveLength(3);
+	it('create — 유료는 상한 없음', async () => {
+		for (const name of ['a', 'b', 'c', 'd']) expect(await service.create(ORG, { name })).toMatchObject({ organization_id: ORG, name, suspended_at: null });
+		expect(repo.rows).toHaveLength(4);
 	});
 
-	it('create — free는 1개', async () => {
+	it('create — free는 1개, 넘으면 403 plan_limit', async () => {
 		repo.plan = 'free';
 		await service.create(ORG, { name: 'a' });
-		expect((await errorOf(service.create(ORG, { name: 'b' }))).code).toBe('plan_limit');
+		expect(await errorOf(service.create(ORG, { name: 'b' }))).toEqual({ type: ForbiddenException, code: 'plan_limit' });
 	});
 
 	it('같은 조직에 같은 이름(대소문자 무시)이면 생성·이름 변경 409 project_conflict', async () => {

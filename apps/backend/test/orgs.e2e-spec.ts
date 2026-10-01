@@ -64,7 +64,7 @@ describe('orgs (e2e)', () => {
 
 		it('빈 이름·모르는 필드는 400', async () => {
 			await t.http().patch(`/orgs/${alice.org_id}`).set(auth(alice)).send({ name: '' }).expect(400);
-			await t.http().patch(`/orgs/${alice.org_id}`).set(auth(alice)).send({ plan: 'team_plus' }).expect(400);
+			await t.http().patch(`/orgs/${alice.org_id}`).set(auth(alice)).send({ plan: 'business' }).expect(400);
 		});
 	});
 });
