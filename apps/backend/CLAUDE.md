@@ -74,8 +74,8 @@ RESTful하게 작성한다. 리소스는 URL, 행위는 HTTP 메서드로 표현
 - DTO는 class-validator + `@ApiProperty`(description·example). 파일은 `<module>/dto/<동사>-<명사>.dto.ts`.
   경로 파라미터도 DTO(`@Param() { id }: IdParamDto`, `@Type(() => Number)`).
 - 필드 이름은 요청·응답 모두 snake_case. DB 컬럼·Prisma 타입과 같은 이름이라 매퍼가 없다.
-- JSON 컬럼(`signature_config`, `headers`)은 DTO에서 zod 스키마로 파싱한다. class-validator로
-  중첩 검증하지 않는다.
+- JSON 컬럼(`signature_config`, `headers`)은 DTO에서 zod 스키마로 파싱한다(`@IsZod(schema)`,
+  `common/http/zod.ts`). class-validator로 중첩 검증하지 않는다.
 - 목록 쿼리는 `cursor`(선택), `limit`(기본 50, 최대 200)에 모듈별 필터. 정렬은 `id DESC` 고정.
 
 ### 응답
@@ -85,8 +85,8 @@ RESTful하게 작성한다. 리소스는 URL, 행위는 HTTP 메서드로 표현
 - 생성 201 + 행, 액션 POST 200 + 갱신된 행, 삭제 204 빈 본문.
 - BigInt id(event·delivery·attempt)는 문자열로 낸다. 전역 직렬화기가 `bigint → string` 처리한다.
   커서도 문자열.
-- 비밀 컬럼(`signing_secret_enc`, `billing_key_enc`, `key_hash`)은 `select`에서 빼서 애초에 읽지
-  않는다. `@Exclude`·`ClassSerializerInterceptor`를 쓰지 않는다. api_key 원문은 생성 응답에서
+- 비밀 컬럼(`signing_secret_enc`, `billing_key_enc`, `key_hash`)은 `select`·`omit`으로 빼서 애초에 읽지
+  않는다. 예외는 `destination.headers_enc`. adapter가 복호화하고 service가 비밀 값을 가려서 낸다. `@Exclude`·`ClassSerializerInterceptor`를 쓰지 않는다. api_key 원문은 생성 응답에서
   한 번만 준다.
 
 ### 오류

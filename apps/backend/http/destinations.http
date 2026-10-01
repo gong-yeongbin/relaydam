@@ -1,0 +1,69 @@
+### 내 조직 목록 — 첫 조직 id를 orgId에 저장한다. 이 파일의 다른 요청보다 먼저 실행한다
+GET {{baseUrl}}/orgs?limit=1
+Authorization: Bearer {{token}}
+
+> {% client.global.set("orgId", response.body.data[0].id); %}
+
+### 프로젝트 목록 — 첫 프로젝트 id를 projectId에 저장한다. 프로젝트가 없으면 projects.http로 먼저 만든다
+GET {{baseUrl}}/orgs/{{orgId}}/projects?limit=1
+Authorization: Bearer {{token}}
+
+> {% client.global.set("projectId", response.body.data[0].id); %}
+
+### 목적지 생성 — 헤더 포함. 응답의 Authorization 값은 가려진다. 만든 id를 destinationId에 저장한다 (free는 프로젝트당 3개)
+POST {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/destinations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"name": "주문 서버",
+	"url": "https://api.example.com/webhooks",
+	"headers": {
+		"Authorization": "Bearer my-server-token",
+		"X-Source": "relaydam"
+	},
+	"timeout_ms": 3000
+}
+
+> {% client.global.set("destinationId", response.body.id); %}
+
+### 목적지 생성 — url이 http(s)가 아니면 400 validation_failed
+POST {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/destinations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"name": "잘못된 주소",
+	"url": "ftp://example.com/x"
+}
+
+### 목적지 목록
+GET {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/destinations?limit=50
+Authorization: Bearer {{token}}
+
+### 목적지 조회
+GET {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/destinations/{{destinationId}}
+Authorization: Bearer {{token}}
+
+### 목적지 수정 — 이름과 최대 시도 횟수만. headers는 그대로다
+PATCH {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/destinations/{{destinationId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"name": "주문 서버 (운영)",
+	"max_attempts": 5
+}
+
+### 목적지 수정 — headers 지우기 (null 또는 빈 객체)
+PATCH {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/destinations/{{destinationId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"headers": null
+}
+
+### 목적지 삭제
+DELETE {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/destinations/{{destinationId}}
+Authorization: Bearer {{token}}
