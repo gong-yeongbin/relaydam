@@ -1,0 +1,106 @@
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import type { connection } from '@prisma/client';
+import { ConnectionService } from './connection.service';
+import type { ConnectionFilter, ConnectionRepository } from './ports/connection.repository';
+
+const PROJECT = 10;
+
+// port를 in-memory fake로 둔다. 소스·목적지는 "어느 project의 것인가"만 들고 있는다
+class FakeConnections implements ConnectionRepository {
+	sources = new Map<number, number>([
+		[1, PROJECT],
+		[2, PROJECT],
+		[9, PROJECT + 1],
+	]);
+	destinations = new Map<number, number>([
+		[1, PROJECT],
+		[2, PROJECT],
+		[9, PROJECT + 1],
+	]);
+	rows: connection[] = [];
+	nextId = 1;
+
+	private inProject(projectId: number, row: connection) {
+		return this.sources.get(row.source_id) === projectId;
+	}
+	create(projectId: number, sourceId: number, destinationId: number) {
+		if (this.sources.get(sourceId) !== projectId) return Promise.resolve('source_not_found' as const);
+		if (this.destinations.get(destinationId) !== projectId) return Promise.resolve('destination_not_found' as const);
+		if (this.rows.some((r) => r.source_id === sourceId && r.destination_id === destinationId)) return Promise.resolve('conflict' as const);
+		const row = { id: this.nextId++, source_id: sourceId, destination_id: destinationId, created_at: new Date(0) };
+		this.rows.push(row);
+		return Promise.resolve(row);
+	}
+	list(projectId: number, filter: ConnectionFilter, cursor: number | null, take: number) {
+		const rows = this.rows
+			.filter((r) => this.inProject(projectId, r) && (cursor === null || r.id < cursor))
+			.filter((r) => (filter.source_id === undefined || r.source_id === filter.source_id) && (filter.destination_id === undefined || r.destination_id === filter.destination_id))
+			.sort((a, b) => b.id - a.id);
+		return Promise.resolve(rows.slice(0, take));
+	}
+	find(projectId: number, id: number) {
+		return Promise.resolve(this.rows.find((r) => r.id === id && this.inProject(projectId, r)) ?? null);
+	}
+	remove(projectId: number, id: number) {
+		const before = this.rows.length;
+		this.rows = this.rows.filter((r) => !(r.id === id && this.inProject(projectId, r)));
+		return Promise.resolve(this.rows.length < before);
+	}
+}
+
+async function errorOf(promise: Promise<unknown>) {
+	const error = await promise.catch((e: unknown) => e);
+	return { type: (error as object).constructor, code: ((error as NotFoundException).getResponse() as { code: string }).code };
+}
+
+describe('ConnectionService', () => {
+	let repo: FakeConnections;
+	let service: ConnectionService;
+
+	beforeEach(() => {
+		repo = new FakeConnections();
+		service = new ConnectionService(repo);
+	});
+
+	it('create — 같은 project의 소스와 목적지를 잇는다', async () => {
+		expect(await service.create(PROJECT, { source_id: 1, destination_id: 2 })).toMatchObject({ id: 1, source_id: 1, destination_id: 2 });
+	});
+
+	it('create — 없거나 다른 project의 소스·목적지는 404, 이미 이어져 있으면 409', async () => {
+		expect(await errorOf(service.create(PROJECT, { source_id: 9, destination_id: 1 }))).toEqual({ type: NotFoundException, code: 'source_not_found' });
+		expect(await errorOf(service.create(PROJECT, { source_id: 1, destination_id: 9 }))).toEqual({ type: NotFoundException, code: 'destination_not_found' });
+		expect((await errorOf(service.create(PROJECT, { source_id: 404, destination_id: 1 }))).code).toBe('source_not_found');
+
+		await service.create(PROJECT, { source_id: 1, destination_id: 1 });
+		expect(await errorOf(service.create(PROJECT, { source_id: 1, destination_id: 1 }))).toEqual({ type: ConflictException, code: 'connection_conflict' });
+		expect(repo.rows).toHaveLength(1);
+	});
+
+	it('list — id 내림차순 페이지, source_id·destination_id로 거른다', async () => {
+		for (const [source_id, destination_id] of [
+			[1, 1],
+			[1, 2],
+			[2, 1],
+		] as const) {
+			await service.create(PROJECT, { source_id, destination_id });
+		}
+
+		const page = await service.list(PROJECT, { limit: 2 });
+		expect(page.data.map((c) => c.id)).toEqual([3, 2]);
+		expect(page.next_cursor).toBe('2');
+		expect((await service.list(PROJECT, { limit: 50, source_id: 1 })).data.map((c) => c.id)).toEqual([2, 1]);
+		expect((await service.list(PROJECT, { limit: 50, destination_id: 1 })).data.map((c) => c.id)).toEqual([3, 1]);
+		expect((await service.list(PROJECT + 1, { limit: 50 })).data).toEqual([]);
+	});
+
+	it('get·remove — 없거나 다른 project면 404 connection_not_found', async () => {
+		const { id } = await service.create(PROJECT, { source_id: 1, destination_id: 1 });
+		expect(await service.get(PROJECT, id)).toMatchObject({ id });
+		expect(await errorOf(service.get(PROJECT + 1, id))).toEqual({ type: NotFoundException, code: 'connection_not_found' });
+		expect((await errorOf(service.remove(PROJECT + 1, id))).code).toBe('connection_not_found');
+
+		await service.remove(PROJECT, id);
+		expect((await errorOf(service.get(PROJECT, id))).code).toBe('connection_not_found');
+		expect((await errorOf(service.remove(PROJECT, id))).code).toBe('connection_not_found');
+	});
+});
