@@ -4,6 +4,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { CipherModule } from './infra/cipher/cipher.module';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ConnectionModule } from './modules/connections/connection.module';
 import { DestinationModule } from './modules/destinations/destination.module';
 import { HealthModule } from './modules/health/health.module';
 import { InvitationModule } from './modules/invitations/invitation.module';
@@ -40,6 +41,7 @@ import { UserModule } from './modules/users/user.module';
 		ProjectModule,
 		SourceModule,
 		DestinationModule,
+		ConnectionModule,
 	],
 })
 export class AppModule {}

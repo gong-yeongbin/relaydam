@@ -189,15 +189,17 @@ model destination {
   @@index([project_id])
 }
 
-// source → destination M:N. 같은 project끼리만 잇는다(service에서 검사).
+// source → destination M:N. 같은 project끼리만 잇는다(adapter에서 검사). 한 쌍은 한 번만 이을 수 있다.
+// 자체 id를 둔 건 다른 리소스와 주소(`/connections/:connectionId`)·커서 페이징을 같게 하려는 것이다.
 model connection {
+  id             Int         @id @default(autoincrement())
   source         source      @relation(fields: [source_id], references: [id], onDelete: Cascade)
   source_id      Int
   destination    destination @relation(fields: [destination_id], references: [id], onDelete: Cascade)
   destination_id Int
   created_at     DateTime    @default(now()) @db.Timestamptz(3)
 
-  @@id([source_id, destination_id])
+  @@unique([source_id, destination_id])
   @@index([destination_id])
 }
 
