@@ -106,7 +106,7 @@ model organization_member {
   @@index([user_id])
 }
 
-// 조직 아래 작업 단위. 소스·목적지·이벤트·api_key가 여기에 속한다(6단계 이후).
+// 조직 아래 작업 단위. 소스·목적지·이벤트·api_key가 여기에 속한다.
 // 같은 조직 안에서 이름은 대소문자를 무시하고 유일하다. 마이그레이션 SQL의 식 인덱스로 강제한다.
 // CREATE UNIQUE INDEX project_organization_id_lower_name_key ON project (organization_id, lower(name));
 // suspended_at은 결제 실패로 plan이 내려가 project 수가 상한을 넘었을 때 채운다(4. billing). 정지 중에는
@@ -119,6 +119,9 @@ model project {
   suspended_at    DateTime?    @db.Timestamptz(3)
   created_at      DateTime     @default(now()) @db.Timestamptz(3)
   updated_at      DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+
+  sources      source[]
+  destinations destination[]
 
   @@index([organization_id])
 }
@@ -139,6 +142,63 @@ model invitation {
   updated_at         DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
 
   @@unique([organization_id, email])
+}
+
+// ─── 수신·전달 설정 ──────────────────────────────────────────────────────
+
+// 웹훅을 받는 창구. slug가 인그레스 URL(`/in/:slug`)이고 서버가 만든 소문자+숫자 20자다. 재발급할 수 있다.
+// 서명 검증은 선택. signing_secret_enc(AES-256-GCM)와 signature_config는 둘 다 있거나 둘 다 없다.
+// 마이그레이션 SQL의 CHECK로 강제한다. config를 비울 때는 JSON null이 아니라 DB NULL(Prisma.DbNull)을 쓴다.
+// signature_config는 `{ preset }` 또는 범용 필드. 모양은 zod 스키마가 정한다.
+// project를 지우면 같이 지워진다. event가 생기는 7. ingress에서 다시 정한다.
+model source {
+  id                 Int      @id @default(autoincrement())
+  project            project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  project_id         Int
+  slug               String   @unique @db.VarChar(20)
+  name               String   @db.VarChar(100)
+  // select에서 빼고 읽는다.
+  signing_secret_enc String?  @db.Text
+  signature_config   Json?
+  created_at         DateTime @default(now()) @db.Timestamptz(3)
+  updated_at         DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  connections connection[]
+
+  @@index([project_id])
+}
+
+// 웹훅을 전달할 고객 서버. headers_enc는 전달 때 덧붙일 헤더 JSON을 AES-256-GCM으로 암호화한 값이고
+// 헤더가 없으면 NULL이다. 응답에는 복호화 후 비밀 키의 값을 가려서 낸다. 서킷 상태는 Valkey에 둔다(8. delivery).
+model destination {
+  id           Int      @id @default(autoincrement())
+  project      project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  project_id   Int
+  name         String   @db.VarChar(100)
+  url          String   @db.VarChar(2048)
+  // select에서 빼고 읽는다.
+  headers_enc  String?  @db.Text
+  timeout_ms   Int      @default(5000)
+  max_attempts Int      @default(10)
+  concurrency  Int      @default(10)
+  created_at   DateTime @default(now()) @db.Timestamptz(3)
+  updated_at   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  connections connection[]
+
+  @@index([project_id])
+}
+
+// source → destination M:N. 같은 project끼리만 잇는다(service에서 검사).
+model connection {
+  source         source      @relation(fields: [source_id], references: [id], onDelete: Cascade)
+  source_id      Int
+  destination    destination @relation(fields: [destination_id], references: [id], onDelete: Cascade)
+  destination_id Int
+  created_at     DateTime    @default(now()) @db.Timestamptz(3)
+
+  @@id([source_id, destination_id])
+  @@index([destination_id])
 }
 
 // ─── 결제·사용량 ─────────────────────────────────────────────────────────
