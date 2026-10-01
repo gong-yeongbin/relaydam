@@ -9,7 +9,8 @@
 		"JWT_SECRET",
 		"GOOGLE_CLIENT_ID",
 		"APP_URL",
-		"MAIL_FROM"
+		"MAIL_FROM",
+		"ENCRYPTION_KEY"
 	],
 	"tasks": {
 		"build": {

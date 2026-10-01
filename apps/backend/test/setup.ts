@@ -11,3 +11,5 @@ process.env.JWT_SECRET ??= 'test-jwt-secret';
 process.env.GOOGLE_CLIENT_ID ??= 'test-google-client-id';
 process.env.APP_URL ??= 'http://localhost:5173';
 process.env.MAIL_FROM ??= 'no-reply@relaydam.local';
+// 테스트 전용 고정 키(32바이트). 운영 키와 무관하다.
+process.env.ENCRYPTION_KEY ??= Buffer.alloc(32, 7).toString('base64');

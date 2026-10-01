@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
+import { CipherModule } from './infra/cipher/cipher.module';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
@@ -27,6 +28,7 @@ import { UserModule } from './modules/users/user.module';
 			},
 		}),
 		PrismaModule,
+		CipherModule,
 		AuthModule,
 		HealthModule,
 		UserModule,
