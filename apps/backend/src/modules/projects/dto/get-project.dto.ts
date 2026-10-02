@@ -38,3 +38,8 @@ export class ProjectPageDto {
 	@ApiProperty({ type: String, nullable: true, description: '다음 페이지 cursor. 없으면 null', example: '10' })
 	next_cursor: string | null;
 }
+
+export class SigningSecretDto {
+	@ApiProperty({ description: '전달 서명 키. 고객 서버가 이 키로 본문의 HMAC-SHA256을 계산해 X-Relaydam-Signature와 비교한다', example: 'rdsec_3q2-7wEAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRo' })
+	signing_secret: string;
+}

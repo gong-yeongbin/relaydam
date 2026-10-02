@@ -16,16 +16,22 @@ describe('PrismaIngressRepository (통합)', () => {
 	let projectId: number;
 	let sourceId: number;
 	let destinationIds: number[];
+	// 소스에 걸린 연결. [{ id, destination_id }]
+	let connections: { id: number; destination_id: number }[];
 	const slug = newSlug();
 
 	const event = (overrides: Partial<NewEvent> = {}): NewEvent => ({
 		project_id: projectId,
 		source_id: sourceId,
 		idempotency_key: `sha256:${newSlug()}`,
+		method: 'POST',
+		path: '',
+		query: '',
+		source_ip: null,
 		headers: { 'content-type': 'application/json' },
 		body: Buffer.from('{"order":1}'),
 		content_type: 'application/json',
-		destination_ids: destinationIds,
+		connections,
 		...overrides,
 	});
 
@@ -35,7 +41,7 @@ describe('PrismaIngressRepository (통합)', () => {
 		sourceId = (await prisma.source.create({ data: { project_id: projectId, slug, name: 'signed', signing_secret_enc: cipher.encrypt('whsec_plain'), signature_config: SIGNATURE } })).id;
 		const destination = () => prisma.destination.create({ data: { project_id: projectId, name: 'd', url: 'https://example.com' } });
 		destinationIds = [(await destination()).id, (await destination()).id];
-		await prisma.connection.createMany({ data: destinationIds.map((destination_id) => ({ source_id: sourceId, destination_id })) });
+		connections = await prisma.connection.createManyAndReturn({ data: destinationIds.map((destination_id) => ({ source_id: sourceId, destination_id })), select: { id: true, destination_id: true } });
 	});
 
 	afterAll(async () => {
@@ -54,7 +60,7 @@ describe('PrismaIngressRepository (통합)', () => {
 			suspended: false,
 			signing_secret: 'whsec_plain',
 			signature_config: SIGNATURE,
-			destination_ids: expect.arrayContaining(destinationIds) as number[],
+			connections: expect.arrayContaining(connections) as typeof connections,
 		});
 		expect(await repository.findSourceBySlug(newSlug())).toBeNull();
 	});
@@ -63,18 +69,21 @@ describe('PrismaIngressRepository (통합)', () => {
 		const suspended = await prisma.project.create({ data: { organization_id: orgId, name: 'suspended', suspended_at: new Date() } });
 		const open = await prisma.source.create({ data: { project_id: suspended.id, slug: newSlug(), name: 'open' } });
 
-		expect(await repository.findSourceBySlug(open.slug)).toMatchObject({ suspended: true, signing_secret: null, signature_config: null, destination_ids: [] });
+		expect(await repository.findSourceBySlug(open.slug)).toMatchObject({ suspended: true, signing_secret: null, signature_config: null, connections: [] });
 	});
 
 	it('storeEvent — event 한 줄과 목적지마다 pending delivery를 만든다. 본문은 받은 바이트 그대로다', async () => {
 		const body = Buffer.from([0xff, 0xfe, 0x00, 0x7b, 0x7d]);
-		const stored = await repository.storeEvent(event({ body, content_type: null }));
+		const stored = await repository.storeEvent(event({ body, content_type: null, method: 'PUT', path: '/orders/42', query: 'v=2', source_ip: '203.0.113.7' }));
 		expect(stored.duplicate).toBe(false);
 		expect(stored.delivery_ids).toHaveLength(2);
 
 		const row = await prisma.event.findUniqueOrThrow({ where: { id: stored.event_id }, include: { deliveries: true } });
 		expect(Buffer.from(row.body).equals(body)).toBe(true);
 		expect(row).toMatchObject({ project_id: projectId, source_id: sourceId, size: 5, content_type: null, headers: { 'content-type': 'application/json' } });
+		expect(row).toMatchObject({ method: 'PUT', path: '/orders/42', query: 'v=2', source_ip: '203.0.113.7' });
+		// delivery마다 어느 연결에서 만들어졌는지 남는다
+		expect(row.deliveries.map((d) => ({ id: d.connection_id, destination_id: d.destination_id })).sort((a, b) => a.id! - b.id!)).toEqual([...connections].sort((a, b) => a.id - b.id));
 		expect(row.deliveries.map((d) => d.id).sort()).toEqual([...stored.delivery_ids].sort());
 		expect(row.deliveries.every((d) => d.status === 'pending' && d.attempt === 0 && d.next_attempt_at === null)).toBe(true);
 		expect(row.deliveries.map((d) => d.destination_id).sort()).toEqual([...destinationIds].sort());
@@ -91,7 +100,7 @@ describe('PrismaIngressRepository (통합)', () => {
 
 	it('storeEvent — delivery를 못 만들면 event도 남지 않는다 (한 트랜잭션)', async () => {
 		const key = 'id:evt_rollback';
-		await expect(repository.storeEvent(event({ idempotency_key: key, destination_ids: [destinationIds[0]!, -1] }))).rejects.toThrow();
+		await expect(repository.storeEvent(event({ idempotency_key: key, connections: [connections[0]!, { id: connections[0]!.id, destination_id: -1 }] }))).rejects.toThrow();
 		expect(await prisma.event.count({ where: { source_id: sourceId, idempotency_key: key } })).toBe(0);
 	});
 

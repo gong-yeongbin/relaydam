@@ -32,6 +32,14 @@ Content-Type: application/json
 	"name": "shop-prod"
 }
 
+### 전달 서명 키 조회 (admin 이상) — 전달 요청의 X-Relaydam-Signature를 이 키로 확인한다
+GET {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/signing-secret
+Authorization: Bearer {{token}}
+
+### 전달 서명 키 교체 (admin 이상) — 새 키가 나온다
+POST {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/signing-secret/rotate
+Authorization: Bearer {{token}}
+
 ### 프로젝트 삭제 (admin 이상)
 DELETE {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}
 Authorization: Bearer {{token}}

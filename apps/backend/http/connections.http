@@ -33,7 +33,7 @@ Content-Type: application/json
 
 > {% client.global.set("destinationId", response.body.id); %}
 
-### 연결 생성 — 소스와 목적지를 잇는다. 만든 id를 connectionId에 저장한다
+### 연결 생성 — 소스와 목적지를 잇는다. 재시도 설정을 안 보내면 2배씩·5분·9회다. 만든 id를 connectionId에 저장한다
 POST {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/connections
 Authorization: Bearer {{token}}
 Content-Type: application/json
@@ -61,6 +61,34 @@ Authorization: Bearer {{token}}
 
 ### 연결 조회
 GET {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/connections/{{connectionId}}
+Authorization: Bearer {{token}}
+
+### 재시도 설정 변경 — 같은 간격으로 1시간마다 5번. 보내지 않은 필드는 그대로다
+PATCH {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/connections/{{connectionId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"retry_strategy": "linear",
+	"retry_interval_ms": 3600000,
+	"retry_count": 5
+}
+
+### 재시도 설정 변경 — 횟수가 50을 넘으면 400 validation_failed
+PATCH {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/connections/{{connectionId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"retry_count": 51
+}
+
+### 일시 정지 — 웹훅은 받아 저장하고 전달만 보류한다
+POST {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/connections/{{connectionId}}/pause
+Authorization: Bearer {{token}}
+
+### 일시 정지 해제
+POST {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/connections/{{connectionId}}/unpause
 Authorization: Bearer {{token}}
 
 ### 연결 끊기 — 소스와 목적지는 남는다

@@ -8,6 +8,8 @@ describe('ProjectController', () => {
 		get: vi.fn().mockResolvedValue('project'),
 		update: vi.fn().mockResolvedValue('updated'),
 		remove: vi.fn().mockResolvedValue(undefined),
+		getSigningSecret: vi.fn().mockResolvedValue('secret'),
+		rotateSigningSecret: vi.fn().mockResolvedValue('rotated'),
 	};
 	const controller = new ProjectController(service as unknown as ProjectService);
 
@@ -26,5 +28,11 @@ describe('ProjectController', () => {
 
 		await controller.remove({ orgId: 1, projectId: 10 });
 		expect(service.remove).toHaveBeenCalledWith(1, 10);
+
+		expect(await controller.getSigningSecret({ orgId: 1, projectId: 10 })).toBe('secret');
+		expect(service.getSigningSecret).toHaveBeenCalledWith(1, 10);
+
+		expect(await controller.rotateSigningSecret({ orgId: 1, projectId: 10 })).toBe('rotated');
+		expect(service.rotateSigningSecret).toHaveBeenCalledWith(1, 10);
 	});
 });

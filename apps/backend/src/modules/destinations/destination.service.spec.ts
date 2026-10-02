@@ -21,7 +21,6 @@ class FakeDestinations implements DestinationRepository {
 			url: data.url,
 			headers: data.headers,
 			timeout_ms: data.timeout_ms ?? 5000,
-			max_attempts: data.max_attempts ?? 10,
 			concurrency: data.concurrency ?? 10,
 			created_at: new Date(0),
 			updated_at: new Date(0),
@@ -70,7 +69,6 @@ describe('DestinationService', () => {
 			url: URL,
 			headers: {},
 			timeout_ms: 5000,
-			max_attempts: 10,
 			concurrency: 10,
 		});
 	});
@@ -103,11 +101,11 @@ describe('DestinationService', () => {
 	it('update — 보내지 않은 필드는 그대로, headers는 통째로 바뀌고 null이면 지운다', async () => {
 		const { id } = await service.create(PROJECT, { name: 'a', url: URL, headers: { 'X-A': '1' }, concurrency: 3 });
 
-		expect(await service.update(PROJECT, id, { url: 'https://new.example.com', max_attempts: 5 })).toMatchObject({
+		expect(await service.update(PROJECT, id, { url: 'https://new.example.com', timeout_ms: 2000 })).toMatchObject({
 			name: 'a',
 			url: 'https://new.example.com',
 			headers: { 'X-A': '1' },
-			max_attempts: 5,
+			timeout_ms: 2000,
 			concurrency: 3,
 		});
 		expect((await service.update(PROJECT, id, { headers: { 'X-B': '2' } })).headers).toEqual({ 'X-B': '2' });

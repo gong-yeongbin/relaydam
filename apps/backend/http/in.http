@@ -37,6 +37,15 @@ Content-Type: text/plain
 
 plain text {{$random.uuid}}
 
+### 웹훅 수신 — PUT과 뒤에 붙은 경로·쿼리도 받는다. 전달할 때 목적지 주소 뒤에 그대로 붙인다
+PUT {{baseUrl}}/in/{{slug}}/orders/42?v=2
+Content-Type: application/json
+
+{ "status": "SHIPPED", "at": "{{$random.uuid}}" }
+
+### 웹훅 수신 — GET은 405 method_not_allowed
+GET {{baseUrl}}/in/{{slug}}
+
 ### 웹훅 수신 — 없는 주소는 404 source_not_found
 POST {{baseUrl}}/in/aaaaaaaaaaaaaaaaaaaa
 Content-Type: application/json

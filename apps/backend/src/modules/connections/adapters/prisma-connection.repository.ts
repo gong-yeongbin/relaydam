@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { type connection, Prisma } from '@prisma/client';
 import { PrismaService } from '@/infra/prisma/prisma.service';
-import type { ConnectionFilter, ConnectionRepository } from '../ports/connection.repository';
+import type { ConnectionFilter, ConnectionRepository, RetryRule } from '../ports/connection.repository';
 
 // 한 쌍 유니크(connection_source_id_destination_id_key)
 const isConflict = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
@@ -10,7 +10,12 @@ const isConflict = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestE
 export class PrismaConnectionRepository implements ConnectionRepository {
 	constructor(private readonly prisma: PrismaService) {}
 
-	async create(projectId: number, sourceId: number, destinationId: number): Promise<connection | 'source_not_found' | 'destination_not_found' | 'conflict'> {
+	async create(
+		projectId: number,
+		sourceId: number,
+		destinationId: number,
+		retry: Partial<RetryRule>,
+	): Promise<connection | 'source_not_found' | 'destination_not_found' | 'conflict'> {
 		const [sources, destinations] = await Promise.all([
 			this.prisma.source.count({ where: { id: sourceId, project_id: projectId } }),
 			this.prisma.destination.count({ where: { id: destinationId, project_id: projectId } }),
@@ -18,7 +23,7 @@ export class PrismaConnectionRepository implements ConnectionRepository {
 		if (sources === 0) return 'source_not_found';
 		if (destinations === 0) return 'destination_not_found';
 		try {
-			return await this.prisma.connection.create({ data: { source_id: sourceId, destination_id: destinationId } });
+			return await this.prisma.connection.create({ data: { source_id: sourceId, destination_id: destinationId, ...retry } });
 		} catch (e) {
 			if (isConflict(e)) return 'conflict';
 			throw e;
@@ -40,6 +45,11 @@ export class PrismaConnectionRepository implements ConnectionRepository {
 
 	find(projectId: number, id: number): Promise<connection | null> {
 		return this.prisma.connection.findFirst({ where: { id, source: { project_id: projectId } } });
+	}
+
+	async update(projectId: number, id: number, data: Partial<RetryRule> & { paused_at?: Date | null }): Promise<connection | null> {
+		const { count } = await this.prisma.connection.updateMany({ where: { id, source: { project_id: projectId } }, data });
+		return count > 0 ? this.find(projectId, id) : null;
 	}
 
 	async remove(projectId: number, id: number): Promise<boolean> {

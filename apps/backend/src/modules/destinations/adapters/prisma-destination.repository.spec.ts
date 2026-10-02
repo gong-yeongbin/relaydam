@@ -32,7 +32,7 @@ describe('PrismaDestinationRepository (통합)', () => {
 	it('create — 잠근 상태의 plan·그 project의 개수를 check에 넘기고, check가 던지면 만들지 않는다. 한도는 기본값', async () => {
 		const seen: unknown[] = [];
 		const created = await destinations.create(projectId, plain('first'), (state) => void seen.push(state));
-		expect(created).toMatchObject({ project_id: projectId, name: 'first', headers: {}, timeout_ms: 5000, max_attempts: 10, concurrency: 10 });
+		expect(created).toMatchObject({ project_id: projectId, name: 'first', headers: {}, timeout_ms: 5000, concurrency: 10 });
 		expect(created).not.toHaveProperty('headers_enc');
 		expect(seen).toEqual([{ plan: 'team', count: 0 }]);
 

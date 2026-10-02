@@ -34,18 +34,41 @@ describe('PrismaConnectionRepository (통합)', () => {
 	});
 
 	it('create — 둘 다 그 project의 것이어야 만든다. 한 쌍은 한 번만', async () => {
-		expect(await connections.create(projectId, sources[0]!, destinations[0]!)).toMatchObject({ source_id: sources[0], destination_id: destinations[0] });
+		expect(await connections.create(projectId, sources[0]!, destinations[0]!, {})).toMatchObject({ source_id: sources[0], destination_id: destinations[0] });
 
-		expect(await connections.create(projectId, sources[2]!, destinations[0]!)).toBe('source_not_found');
-		expect(await connections.create(projectId, sources[0]!, destinations[2]!)).toBe('destination_not_found');
-		expect(await connections.create(projectId, sources[0]!, destinations[0]!)).toBe('conflict');
+		expect(await connections.create(projectId, sources[2]!, destinations[0]!, {})).toBe('source_not_found');
+		expect(await connections.create(projectId, sources[0]!, destinations[2]!, {})).toBe('destination_not_found');
+		expect(await connections.create(projectId, sources[0]!, destinations[0]!, {})).toBe('conflict');
 		expect(await prisma.connection.count({ where: { source_id: sources[0] } })).toBe(1);
 	});
 
+	it('create — 재시도 설정을 안 주면 DB 기본값(2배씩·5분·9회), 주면 그 값이다', async () => {
+		const defaults = (await connections.create(otherProjectId, sources[2]!, destinations[2]!, {})) as connection;
+		expect(defaults).toMatchObject({ retry_strategy: 'exponential', retry_interval_ms: 300_000, retry_count: 9, paused_at: null });
+		await prisma.connection.delete({ where: { id: defaults.id } });
+
+		const custom = (await connections.create(otherProjectId, sources[2]!, destinations[2]!, { retry_strategy: 'linear', retry_interval_ms: 60_000, retry_count: 0 })) as connection;
+		expect(custom).toMatchObject({ retry_strategy: 'linear', retry_interval_ms: 60_000, retry_count: 0 });
+		await prisma.connection.delete({ where: { id: custom.id } });
+	});
+
+	it('update — 준 필드만 바꾼다. paused_at은 채우고 비울 수 있다. 다른 project의 id는 null', async () => {
+		const c = (await connections.create(projectId, sources[1]!, destinations[1]!, {})) as connection;
+		const pausedAt = new Date('2026-10-02T03:00:00Z');
+
+		expect(await connections.update(projectId, c.id, { retry_count: 3 })).toMatchObject({ retry_strategy: 'exponential', retry_interval_ms: 300_000, retry_count: 3 });
+		expect(await connections.update(projectId, c.id, { paused_at: pausedAt })).toMatchObject({ paused_at: pausedAt, retry_count: 3 });
+		expect(await connections.update(projectId, c.id, { paused_at: null })).toMatchObject({ paused_at: null });
+
+		expect(await connections.update(otherProjectId, c.id, { retry_count: 1 })).toBeNull();
+		expect(await connections.find(projectId, c.id)).toMatchObject({ retry_count: 3 });
+		await prisma.connection.delete({ where: { id: c.id } });
+	});
+
 	it('list — id 내림차순, cursor보다 작은 것부터. 필터와 project 범위가 걸린다', async () => {
-		await connections.create(projectId, sources[0]!, destinations[1]!);
-		await connections.create(projectId, sources[1]!, destinations[0]!);
-		await connections.create(otherProjectId, sources[2]!, destinations[2]!);
+		await connections.create(projectId, sources[0]!, destinations[1]!, {});
+		await connections.create(projectId, sources[1]!, destinations[0]!, {});
+		await connections.create(otherProjectId, sources[2]!, destinations[2]!, {});
 
 		const all = await connections.list(projectId, {}, null, 100);
 		expect(all).toHaveLength(3);
@@ -59,7 +82,7 @@ describe('PrismaConnectionRepository (통합)', () => {
 	});
 
 	it('find·remove — 다른 project의 id는 null/false', async () => {
-		const c = (await connections.create(projectId, sources[1]!, destinations[1]!)) as connection;
+		const c = (await connections.create(projectId, sources[1]!, destinations[1]!, {})) as connection;
 
 		expect(await connections.find(otherProjectId, c.id)).toBeNull();
 		expect(await connections.remove(otherProjectId, c.id)).toBe(false);

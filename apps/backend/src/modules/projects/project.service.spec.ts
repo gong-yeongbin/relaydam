@@ -1,25 +1,37 @@
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import type { Plan, project } from '@prisma/client';
+import type { Plan } from '@prisma/client';
 import { ProjectService } from './project.service';
-import type { CreateCheck, ProjectRepository } from './ports/project.repository';
+import type { CreateCheck, ProjectRepository, ProjectView } from './ports/project.repository';
 
 const ORG = 1;
 
 // port를 in-memory fake로 둔다. 근거는 context-notes.md "계층별 테스트".
 class FakeProjects implements ProjectRepository {
 	plan: Plan = 'team';
-	rows: project[] = [];
+	rows: ProjectView[] = [];
+	// 서명 키는 평문 그대로 들고 있는다(암호화는 adapter 몫). 키가 없는 예전 project는 null
+	secrets = new Map<number, string | null>();
 	nextId = 1;
 
 	private taken(orgId: number, name: string, exceptId?: number) {
 		return this.rows.some((r) => r.organization_id === orgId && r.id !== exceptId && r.name.toLowerCase() === name.toLowerCase());
 	}
-	create(orgId: number, name: string, check: CreateCheck) {
+	create(orgId: number, data: { name: string; signing_secret: string }, check: CreateCheck) {
 		check({ plan: this.plan, count: this.rows.filter((r) => r.organization_id === orgId).length });
-		if (this.taken(orgId, name)) return Promise.resolve('name_conflict' as const);
-		const row = { id: this.nextId++, organization_id: orgId, name, suspended_at: null, created_at: new Date(0), updated_at: new Date(0) };
+		if (this.taken(orgId, data.name)) return Promise.resolve('name_conflict' as const);
+		const row = { id: this.nextId++, organization_id: orgId, name: data.name, suspended_at: null, created_at: new Date(0), updated_at: new Date(0) };
 		this.rows.push(row);
+		this.secrets.set(row.id, data.signing_secret);
 		return Promise.resolve(row);
+	}
+	findSigningSecret(orgId: number, id: number) {
+		const row = this.rows.find((r) => r.organization_id === orgId && r.id === id);
+		return Promise.resolve(row ? (this.secrets.get(id) ?? null) : undefined);
+	}
+	setSigningSecret(orgId: number, id: number, secret: string) {
+		const row = this.rows.find((r) => r.organization_id === orgId && r.id === id);
+		if (row) this.secrets.set(id, secret);
+		return Promise.resolve(row !== undefined);
 	}
 	list(orgId: number, cursor: number | null, take: number) {
 		const rows = this.rows.filter((r) => r.organization_id === orgId && (cursor === null || r.id < cursor)).sort((a, b) => b.id - a.id);
@@ -75,6 +87,42 @@ describe('ProjectService', () => {
 		expect((await errorOf(service.update(ORG, blog.id, { name: 'Shop' }))).code).toBe('project_conflict');
 		// 자기 이름으로 바꾸는 것은 충돌이 아니다
 		expect(await service.update(ORG, blog.id, { name: 'Blog' })).toMatchObject({ name: 'Blog' });
+	});
+
+	describe('전달 서명 키', () => {
+		it('만들 때 같이 발급하고, 조회하면 그 키가 나온다. 응답에는 키가 없다', async () => {
+			const created = await service.create(ORG, { name: 'a' });
+			expect(created).not.toHaveProperty('signing_secret');
+			expect(created).not.toHaveProperty('signing_secret_enc');
+
+			const { signing_secret } = await service.getSigningSecret(ORG, created.id);
+			expect(signing_secret).toMatch(/^rdsec_[A-Za-z0-9_-]{43}$/);
+			expect(await service.getSigningSecret(ORG, created.id)).toEqual({ signing_secret });
+		});
+
+		it('교체하면 새 키가 나오고 그 뒤 조회도 새 키다', async () => {
+			const { id } = await service.create(ORG, { name: 'a' });
+			const before = await service.getSigningSecret(ORG, id);
+
+			const rotated = await service.rotateSigningSecret(ORG, id);
+			expect(rotated.signing_secret).not.toBe(before.signing_secret);
+			expect(await service.getSigningSecret(ORG, id)).toEqual(rotated);
+		});
+
+		it('키가 없는 예전 project는 처음 조회할 때 만든다', async () => {
+			const { id } = await service.create(ORG, { name: 'legacy' });
+			repo.secrets.set(id, null);
+
+			const first = await service.getSigningSecret(ORG, id);
+			expect(first.signing_secret).toMatch(/^rdsec_/);
+			expect(await service.getSigningSecret(ORG, id)).toEqual(first);
+		});
+
+		it('없거나 다른 조직의 project면 404 project_not_found', async () => {
+			const { id } = await service.create(ORG, { name: 'a' });
+			expect(await errorOf(service.getSigningSecret(ORG + 1, id))).toEqual({ type: NotFoundException, code: 'project_not_found' });
+			expect((await errorOf(service.rotateSigningSecret(ORG + 1, id))).code).toBe('project_not_found');
+		});
 	});
 
 	it('list — id 내림차순 페이지', async () => {

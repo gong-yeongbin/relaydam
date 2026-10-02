@@ -37,7 +37,7 @@ describe('destinations (e2e)', () => {
 
 	it('이름과 url만 보내면 기본값으로 만든다', async () => {
 		const created = (await create({ name: 'orders', url: URL }).expect(201)).body as DestinationDto;
-		expect(created).toMatchObject({ project_id: projectId, name: 'orders', url: URL, headers: {}, timeout_ms: 5000, max_attempts: 10, concurrency: 10 });
+		expect(created).toMatchObject({ project_id: projectId, name: 'orders', url: URL, headers: {}, timeout_ms: 5000, concurrency: 10 });
 		expect(created).not.toHaveProperty('headers_enc');
 	});
 
@@ -45,9 +45,9 @@ describe('destinations (e2e)', () => {
 		const headers = { Authorization: 'Bearer real-server-token', 'X-Source': 'relaydam' };
 		const masked = { Authorization: 'Bearer ****', 'X-Source': 'relaydam' };
 
-		const response = await create({ name: 'with headers', url: URL, headers, timeout_ms: 3000, max_attempts: 5, concurrency: 2 }).expect(201);
+		const response = await create({ name: 'with headers', url: URL, headers, timeout_ms: 3000, concurrency: 2 }).expect(201);
 		const created = response.body as DestinationDto;
-		expect(created).toMatchObject({ headers: masked, timeout_ms: 3000, max_attempts: 5, concurrency: 2 });
+		expect(created).toMatchObject({ headers: masked, timeout_ms: 3000, concurrency: 2 });
 		expect(response.text).not.toMatch(/real-server-token|headers_enc/);
 
 		const row = await t.prisma.destination.findUniqueOrThrow({ where: { id: created.id } });
@@ -64,7 +64,7 @@ describe('destinations (e2e)', () => {
 		['url이 http(s)가 아님', { name: 'a', url: 'ftp://example.com/x' }, 'url'],
 		['url 없음', { name: 'a' }, 'url'],
 		['timeout_ms 범위 밖', { name: 'a', url: URL, timeout_ms: 500 }, 'timeout_ms'],
-		['max_attempts 범위 밖', { name: 'a', url: URL, max_attempts: 21 }, 'max_attempts'],
+		['모르는 필드(max_attempts는 connection의 retry_count로 옮겼다)', { name: 'a', url: URL, max_attempts: 5 }, 'max_attempts'],
 		['concurrency 범위 밖', { name: 'a', url: URL, concurrency: 0 }, 'concurrency'],
 		['headers 값에 줄바꿈', { name: 'a', url: URL, headers: { 'X-A': 'a\r\nX-Injected: 1' } }, 'headers'],
 		['headers 값이 문자열이 아님', { name: 'a', url: URL, headers: { 'X-A': 1 } }, 'headers'],
@@ -81,7 +81,7 @@ describe('destinations (e2e)', () => {
 		const stored = async () => (await t.prisma.destination.findUniqueOrThrow({ where: { id: created.id } })).headers_enc;
 		const before = await stored();
 
-		expect((await patch({ name: 'b', max_attempts: 5 }).expect(200)).body).toMatchObject({ name: 'b', url: URL, headers: { 'X-Api-Key': '****' }, max_attempts: 5, concurrency: 3 });
+		expect((await patch({ name: 'b', timeout_ms: 2000 }).expect(200)).body).toMatchObject({ name: 'b', url: URL, headers: { 'X-Api-Key': '****' }, timeout_ms: 2000, concurrency: 3 });
 		expect(await stored()).toBe(before);
 
 		expect(((await patch({ headers: { 'X-Source': 'relaydam' } }).expect(200)).body as DestinationDto).headers).toEqual({ 'X-Source': 'relaydam' });

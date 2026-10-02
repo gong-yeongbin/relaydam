@@ -4,7 +4,7 @@ import type { DestinationHeaders } from '../domain/headers';
 // headers는 복호화한 원문이다. 응답으로 낼 때는 service가 가린다. 암호문 컬럼은 밖으로 내지 않는다
 export type DestinationRecord = Omit<destination, 'headers_enc'> & { headers: DestinationHeaders };
 
-export type DestinationWrite = { name: string; url: string; headers: DestinationHeaders; timeout_ms?: number; max_attempts?: number; concurrency?: number };
+export type DestinationWrite = { name: string; url: string; headers: DestinationHeaders; timeout_ms?: number; concurrency?: number };
 
 // 조직 행을 잠근 채 읽은 상태. check가 던지면 만들지 않는다
 export type CreateCheck = (state: { plan: Plan; count: number }) => void;

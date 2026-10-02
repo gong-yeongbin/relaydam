@@ -31,9 +31,6 @@ export class DestinationDto {
 	timeout_ms: number;
 
 	@ApiProperty({ example: 10 })
-	max_attempts: number;
-
-	@ApiProperty({ example: 10 })
 	concurrency: number;
 
 	@ApiProperty({ example: '2026-10-01T00:00:00.000Z' })

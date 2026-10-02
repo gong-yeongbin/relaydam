@@ -35,13 +35,6 @@ export class CreateDestinationDto {
 	@Max(30000)
 	timeout_ms?: number;
 
-	@ApiPropertyOptional({ description: '최대 시도 횟수. 넘으면 dead', default: 10, minimum: 1, maximum: 20 })
-	@IsOptional()
-	@IsInt()
-	@Min(1)
-	@Max(20)
-	max_attempts?: number;
-
 	@ApiPropertyOptional({ description: '이 목적지로 동시에 보내는 요청 수', default: 10, minimum: 1, maximum: 100 })
 	@IsOptional()
 	@IsInt()

@@ -213,4 +213,51 @@ describe('in (e2e) — 웹훅 수신', () => {
 		expect(await t.prisma.event.findUnique({ where: { id } })).toBeNull();
 		expect(await t.prisma.delivery.count({ where: { event_id: id } })).toBe(0);
 	});
+
+	describe('요청 방식·경로·쿼리', () => {
+		it('PUT·PATCH·DELETE도 받는다. 뒤에 붙은 경로와 쿼리, 보낸 쪽 IP를 저장한다', async () => {
+			for (const method of ['put', 'patch', 'delete'] as const) {
+				const body = unique();
+				const response = await t.http()[method](`/in/${open.slug}/orders/42/items?v=2&tag=a%20b`).set('Content-Type', 'application/json').send(body).expect(200);
+				const event = await t.prisma.event.findUniqueOrThrow({ where: { id: BigInt((response.body as { id: string }).id) } });
+
+				expect(event).toMatchObject({ method: method.toUpperCase(), path: '/orders/42/items', query: 'v=2&tag=a%20b' });
+				expect(event.source_ip).toMatch(/127\.0\.0\.1|::1/);
+				expect(Buffer.from(event.body).toString()).toBe(body);
+			}
+		});
+
+		it('경로 없이 온 POST는 path와 query가 빈 문자열이다', async () => {
+			const response = await json(open.slug, unique()).expect(200);
+			const event = await t.prisma.event.findUniqueOrThrow({ where: { id: BigInt((response.body as { id: string }).id) } });
+			expect(event).toMatchObject({ method: 'POST', path: '', query: '' });
+		});
+
+		it('본문이 같아도 경로가 다르면 다른 이벤트다', async () => {
+			const body = unique();
+			const a = (await t.http().post(`/in/${open.slug}/a`).set('Content-Type', 'application/json').send(body).expect(200)).body as { id: string };
+			const b = (await t.http().post(`/in/${open.slug}/b`).set('Content-Type', 'application/json').send(body).expect(200)).body as { id: string };
+			const again = (await t.http().post(`/in/${open.slug}/a`).set('Content-Type', 'application/json').send(body).expect(200)).body as { id: string };
+
+			expect(b.id).not.toBe(a.id);
+			expect(again.id).toBe(a.id);
+		});
+
+		it('GET은 405 method_not_allowed. 저장하지 않는다', async () => {
+			const before = await eventsOf(open.id);
+			expect(errorOf(await t.http().get(`/in/${open.slug}`).expect(405)).code).toBe('method_not_allowed');
+			expect(errorOf(await t.http().get(`/in/${open.slug}/any/path`).expect(405)).code).toBe('method_not_allowed');
+			expect(await eventsOf(open.id)).toBe(before);
+		});
+
+		it('delivery에 어느 연결에서 만들어졌는지 남는다', async () => {
+			const response = await json(open.slug, unique()).expect(200);
+			const deliveries = await t.prisma.delivery.findMany({ where: { event_id: BigInt((response.body as { id: string }).id) }, include: { connection: true } });
+
+			expect(deliveries).toHaveLength(2);
+			for (const delivery of deliveries) {
+				expect(delivery.connection).toMatchObject({ source_id: open.id, destination_id: delivery.destination_id });
+			}
+		});
+	});
 });

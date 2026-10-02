@@ -9,7 +9,7 @@ const NOT_FOUND = { code: 'destination_not_found', message: '목적지가 없습
 // 응답으로 나가는 모양. headers의 비밀 값은 가려져 있다
 export type DestinationView = DestinationRecord;
 
-type DestinationInput = { name?: string; url?: string; headers?: DestinationHeaders | null; timeout_ms?: number; max_attempts?: number; concurrency?: number };
+type DestinationInput = { name?: string; url?: string; headers?: DestinationHeaders | null; timeout_ms?: number; concurrency?: number };
 
 const toView = (record: DestinationRecord): DestinationView => ({ ...record, headers: maskHeaders(record.headers) });
 
@@ -54,7 +54,7 @@ export class DestinationService {
 
 	// null은 "보내지 않음"과 같게 본다(@IsOptional이 null을 통과시킨다)
 	private limits(input: DestinationInput) {
-		return { timeout_ms: input.timeout_ms ?? undefined, max_attempts: input.max_attempts ?? undefined, concurrency: input.concurrency ?? undefined };
+		return { timeout_ms: input.timeout_ms ?? undefined, concurrency: input.concurrency ?? undefined };
 	}
 
 	private notFound(): never {

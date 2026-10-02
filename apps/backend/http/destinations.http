@@ -45,14 +45,14 @@ Authorization: Bearer {{token}}
 GET {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/destinations/{{destinationId}}
 Authorization: Bearer {{token}}
 
-### 목적지 수정 — 이름과 최대 시도 횟수만. headers는 그대로다
+### 목적지 수정 — 이름과 타임아웃만. headers는 그대로다
 PATCH {{baseUrl}}/orgs/{{orgId}}/projects/{{projectId}}/destinations/{{destinationId}}
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
 	"name": "주문 서버 (운영)",
-	"max_attempts": 5
+	"timeout_ms": 10000
 }
 
 ### 목적지 수정 — headers 지우기 (null 또는 빈 객체)

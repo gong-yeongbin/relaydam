@@ -99,7 +99,8 @@ RESTful하게 작성한다. 리소스는 URL, 행위는 HTTP 메서드로 표현
 - 상태 코드. 400 `validation_failed`, 401 `unauthenticated`(토큰·키 없음·만료·폐기), 403
   `forbidden`·`plan_limit`, 404 `<리소스>_not_found`, 409 `<리소스>_conflict`(slug 중복 등),
   413 `payload_too_large`, 429 `rate_limited`·`usage_exceeded`.
-- 인그레스 `/in/:slug`의 서명 실패는 401 `invalid_signature`, 소스 없음은 404, 정지된 project는 403
+- 인그레스 `/in/:slug`는 POST·PUT·PATCH·DELETE를 받고 그 밖은 405 `method_not_allowed`. 뒤에 붙은 경로와 쿼리는
+  저장했다가 전달할 때 목적지 주소에 붙인다. 서명 실패는 401 `invalid_signature`, 소스 없음은 404, 정지된 project는 403
   `project_suspended`, 연결 없는 소스는 409 `no_connection`. 발신자에게 그 이상을 알려주지 않는다.
   거부 사유의 세부(서명 헤더 없음·불일치·시각 초과)는 거부 기록에만 남긴다.
 

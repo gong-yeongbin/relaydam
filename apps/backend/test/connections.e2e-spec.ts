@@ -97,4 +97,77 @@ describe('connections (e2e)', () => {
 		expect([...first.data, ...second.data].map((c) => c.id)).toEqual(all.data.map((c) => c.id));
 		expect(second.next_cursor).toBeNull();
 	});
+
+	describe('재시도 설정과 일시 정지', () => {
+		let id: number;
+		const item = (connectionId: number, suffix = '') => `${path(projectId, connectionId)}${suffix}`;
+
+		beforeAll(async () => {
+			const fresh = [await source(projectId), await destination(projectId)] as const;
+			id = ((await connect(fresh[0], fresh[1]).expect(201)).body as ConnectionDto).id;
+		});
+
+		it('재시도 설정을 안 보내면 2배씩·5분·9회로 만든다', async () => {
+			expect((await t.http().get(item(id)).set(auth(owner)).expect(200)).body).toMatchObject({
+				retry_strategy: 'exponential',
+				retry_interval_ms: 300_000,
+				retry_count: 9,
+				paused_at: null,
+			});
+		});
+
+		it('만들 때 재시도 설정을 줄 수 있다', async () => {
+			const created = await t
+				.http()
+				.post(path(projectId))
+				.set(auth(owner))
+				.send({ source_id: await source(projectId), destination_id: await destination(projectId), retry_strategy: 'linear', retry_interval_ms: 3_600_000, retry_count: 5 })
+				.expect(201);
+			expect(created.body).toMatchObject({ retry_strategy: 'linear', retry_interval_ms: 3_600_000, retry_count: 5 });
+		});
+
+		it('member가 재시도 설정을 바꾼다. 보낸 필드만 바뀐다', async () => {
+			const patch = (body: object) => t.http().patch(item(id)).set(auth(member)).send(body);
+
+			expect((await patch({ retry_count: 0 }).expect(200)).body).toMatchObject({ retry_strategy: 'exponential', retry_interval_ms: 300_000, retry_count: 0 });
+			expect((await patch({ retry_strategy: 'linear', retry_interval_ms: 60_000 }).expect(200)).body).toMatchObject({
+				retry_strategy: 'linear',
+				retry_interval_ms: 60_000,
+				retry_count: 0,
+			});
+		});
+
+		it.each([
+			['모르는 방식', { retry_strategy: 'random' }, 'retry_strategy'],
+			['간격이 1초 미만', { retry_interval_ms: 999 }, 'retry_interval_ms'],
+			['간격이 24시간 초과', { retry_interval_ms: 86_400_001 }, 'retry_interval_ms'],
+			['횟수가 50 초과', { retry_count: 51 }, 'retry_count'],
+			['횟수가 음수', { retry_count: -1 }, 'retry_count'],
+			['소스·목적지는 바꿀 수 없다', { source_id: 1 }, 'source_id'],
+		])('400 validation_failed — %s', async (_name, body, field) => {
+			const error = errorOf(await t.http().patch(item(id)).set(auth(owner)).send(body).expect(400));
+			expect(error.code).toBe('validation_failed');
+			expect(new Set(error.details?.map((d) => d.field))).toEqual(new Set([field]));
+		});
+
+		it('일시 정지하면 멈춘 시각이 남고, 다시 멈춰도 그대로이고, 풀면 비워진다', async () => {
+			const paused = (await t.http().post(item(id, '/pause')).set(auth(member)).expect(200)).body as ConnectionDto;
+			expect(paused.paused_at).not.toBeNull();
+
+			const again = (await t.http().post(item(id, '/pause')).set(auth(member)).expect(200)).body as ConnectionDto;
+			expect(again.paused_at).toBe(paused.paused_at);
+
+			expect((await t.http().post(item(id, '/unpause')).set(auth(member)).expect(200)).body).toMatchObject({ paused_at: null });
+		});
+
+		it('다른 project에서는 수정·일시 정지·재개가 404 connection_not_found', async () => {
+			for (const request of [
+				() => t.http().patch(item(id).replace(`/projects/${projectId}/`, `/projects/${otherProjectId}/`)).send({ retry_count: 1 }),
+				() => t.http().post(item(id, '/pause').replace(`/projects/${projectId}/`, `/projects/${otherProjectId}/`)),
+				() => t.http().post(item(id, '/unpause').replace(`/projects/${projectId}/`, `/projects/${otherProjectId}/`)),
+			]) {
+				expect(errorOf(await request().set(auth(owner)).expect(404)).code).toBe('connection_not_found');
+			}
+		});
+	});
 });

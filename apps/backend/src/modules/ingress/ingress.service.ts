@@ -6,6 +6,7 @@ import {
 	Inject,
 	Injectable,
 	Logger,
+	MethodNotAllowedException,
 	NotFoundException,
 	PayloadTooLargeException,
 	UnauthorizedException,
@@ -23,6 +24,9 @@ import { INGRESS_REPOSITORY, type IngressRepository, type IngressSource } from '
 
 const SLUG = new RegExp(`^[a-z0-9]{${SLUG_LENGTH}}$`);
 
+// Hookdeck과 같다. GET·HEAD는 받지 않는다
+const METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 // 발신자에게 주는 응답. 서명 실패의 세부 사유는 주지 않는다(거부 기록에만 남는다)
 const INVALID_SIGNATURE = () => new UnauthorizedException({ code: 'invalid_signature', message: '서명이 올바르지 않습니다.' });
 const RESPONSE: Record<RejectionReason, () => HttpException> = {
@@ -35,8 +39,19 @@ const RESPONSE: Record<RejectionReason, () => HttpException> = {
 	usage_exceeded: () => new HttpException({ code: 'usage_exceeded', message: '이번 달 무료 사용량을 넘었습니다.' }, HttpStatus.TOO_MANY_REQUESTS),
 };
 
+// path는 `/in/:slug` 뒤에 붙은 경로(없으면 빈 문자열), query는 `?`를 뺀 쿼리 문자열이다. 전달할 때 그대로 쓴다.
 // size는 본문 크기다. 상한을 넘는 본문은 읽지 않으므로 그때 body는 비어 있고 size는 발신자가 선언한 크기다
-export type IncomingWebhook = { slug: string; headers: RequestHeaders; body: Buffer; size: number; now: Date };
+export type IncomingWebhook = {
+	slug: string;
+	method: string;
+	path: string;
+	query: string;
+	source_ip: string | null;
+	headers: RequestHeaders;
+	body: Buffer;
+	size: number;
+	now: Date;
+};
 
 // Json 컬럼에는 undefined를 넣을 수 없다
 function definedHeaders(headers: RequestHeaders): Prisma.InputJsonObject {
@@ -57,12 +72,14 @@ export class IngressService {
 	// 검사 순서는 "소스(정지·연결) → 본문 크기 → 서명 → 사용량 → 저장"이다. 사용량은 거부 판정이 끝난 뒤에만 올린다.
 	// 근거는 context-notes.md "수신 정책과 삭제 정책"
 	async receive(webhook: IncomingWebhook): Promise<{ id: bigint }> {
+		if (!METHODS.has(webhook.method)) throw new MethodNotAllowedException({ code: 'method_not_allowed', message: 'POST, PUT, PATCH, DELETE만 받습니다.' });
+
 		// 모양이 다른 slug는 DB를 보지 않고 없는 주소로 답한다
 		const source = SLUG.test(webhook.slug) ? await this.repository.findSourceBySlug(webhook.slug) : null;
 		if (!source) throw new NotFoundException({ code: 'source_not_found', message: '소스가 없습니다.' });
 
 		if (source.suspended) return this.reject(source, 'project_suspended', webhook);
-		if (source.destination_ids.length === 0) return this.reject(source, 'no_connection', webhook);
+		if (source.connections.length === 0) return this.reject(source, 'no_connection', webhook);
 		if (webhook.size > INGRESS_BODY_LIMIT) return this.reject(source, 'payload_too_large', webhook);
 
 		if (source.signature_config && source.signing_secret !== null) {
@@ -78,11 +95,15 @@ export class IngressService {
 		const stored = await this.repository.storeEvent({
 			project_id: source.project_id,
 			source_id: source.id,
-			idempotency_key: idempotencyKey(source.signature_config?.event_id_header, webhook.headers, webhook.body),
+			idempotency_key: idempotencyKey(source.signature_config?.event_id_header, webhook),
+			method: webhook.method,
+			path: webhook.path,
+			query: webhook.query,
+			source_ip: webhook.source_ip,
 			headers: definedHeaders(webhook.headers),
 			body: webhook.body,
 			content_type: typeof contentType === 'string' ? contentType : null,
-			destination_ids: source.destination_ids,
+			connections: source.connections,
 		});
 		if (!stored.duplicate) await this.enqueue(stored.delivery_ids);
 		return { id: stored.event_id };
