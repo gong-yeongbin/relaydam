@@ -13,6 +13,7 @@ import { InvitationModule } from './modules/invitations/invitation.module';
 import { MemberModule } from './modules/members/member.module';
 import { OrgModule } from './modules/orgs/org.module';
 import { ProjectModule } from './modules/projects/project.module';
+import { RejectedRequestModule } from './modules/rejected-requests/rejected-request.module';
 import { SourceModule } from './modules/sources/source.module';
 import { UserModule } from './modules/users/user.module';
 
@@ -46,6 +47,7 @@ import { UserModule } from './modules/users/user.module';
 		DestinationModule,
 		ConnectionModule,
 		IngressModule,
+		RejectedRequestModule,
 	],
 })
 export class AppModule {}
