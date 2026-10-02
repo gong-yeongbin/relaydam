@@ -2,6 +2,7 @@ import { ConflictException, Inject, Injectable, NotFoundException } from '@nestj
 import type { connection } from '@prisma/client';
 import { type ListQueryDto, type Page, toPage } from '@/common/http/pagination';
 import { CONNECTION_REPOSITORY, type ConnectionFilter, type ConnectionRepository, type RetryRule } from './ports/connection.repository';
+import { HELD_DELIVERIES, type HeldDeliveries } from './ports/held-deliveries';
 
 const NOT_FOUND = { code: 'connection_not_found', message: '연결이 없습니다.' };
 
@@ -16,7 +17,10 @@ const retryOf = (input: RetryInput): Partial<RetryRule> => ({
 
 @Injectable()
 export class ConnectionService {
-	constructor(@Inject(CONNECTION_REPOSITORY) private readonly connections: ConnectionRepository) {}
+	constructor(
+		@Inject(CONNECTION_REPOSITORY) private readonly connections: ConnectionRepository,
+		@Inject(HELD_DELIVERIES) private readonly held: HeldDeliveries,
+	) {}
 
 	async create(projectId: number, input: { source_id: number; destination_id: number } & RetryInput): Promise<connection> {
 		const created = await this.connections.create(projectId, input.source_id, input.destination_id, retryOf(input));
@@ -48,9 +52,11 @@ export class ConnectionService {
 		return (await this.connections.update(projectId, id, { paused_at: now })) ?? this.notFound();
 	}
 
-	// 다시 전달한다. 보류해 둔 전달을 큐에 넣는 일은 전달 워커 쪽(8. delivery 2단계)에서 붙인다
+	// 다시 전달한다. 멈춘 동안 보류해 둔 전달을 큐에 넣어 이어서 보낸다
 	async unpause(projectId: number, id: number): Promise<connection> {
-		return (await this.connections.update(projectId, id, { paused_at: null })) ?? this.notFound();
+		const unpaused = (await this.connections.update(projectId, id, { paused_at: null })) ?? this.notFound();
+		await this.held.release(id);
+		return unpaused;
 	}
 
 	async remove(projectId: number, id: number): Promise<void> {

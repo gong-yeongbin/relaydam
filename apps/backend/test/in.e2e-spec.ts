@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { ValkeyService } from '@/infra/valkey/valkey.service';
-import { DELIVERY_STREAM } from '@/modules/ingress/adapters/valkey-delivery.queue';
+import { DELIVERY_STREAM } from '@/modules/deliveries/adapters/valkey-delivery.queue';
 import { usageKey } from '@/modules/ingress/adapters/valkey-ingress.counters';
 import { usagePeriod } from '@/modules/ingress/domain/usage-period';
 import { newSlug } from '@/modules/sources/domain/slug';

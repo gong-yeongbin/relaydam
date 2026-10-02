@@ -1,7 +1,7 @@
 # apps/backend
 
-API·워커 서버. NestJS 11 + Fastify + Prisma/PostgreSQL + Valkey(ioredis). 같은 앱을
-`APP_ROLE=api|consumer`로 나눠 띄운다. 루트 `CLAUDE.md`와 `docs/webhook-gateway/`가 전제다.
+API·워커 서버. NestJS 11 + Fastify + Prisma/PostgreSQL + Valkey(ioredis). 같은 이미지를 진입점으로 나눠 띄운다.
+API는 `main.ts`(`AppModule`), 전달 워커는 `main.consumer.ts`(`ConsumerModule`, HTTP 서버 없음). 루트 `CLAUDE.md`와 `docs/webhook-gateway/`가 전제다.
 
 ## 아키텍처
 

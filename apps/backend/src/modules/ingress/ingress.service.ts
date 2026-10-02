@@ -18,7 +18,7 @@ import { SLUG_LENGTH } from '@/modules/sources/domain/slug';
 import { idempotencyKey } from './domain/idempotency';
 import { type RequestHeaders, verifySignature } from './domain/signature';
 import { usagePeriod } from './domain/usage-period';
-import { DELIVERY_QUEUE, type DeliveryQueue } from './ports/delivery.queue';
+import { DELIVERY_QUEUE, type DeliveryQueue } from '@/modules/deliveries/ports/delivery.queue';
 import { INGRESS_COUNTERS, type IngressCounters } from './ports/ingress.counters';
 import { INGRESS_REPOSITORY, type IngressRepository, type IngressSource } from './ports/ingress.repository';
 
@@ -114,7 +114,7 @@ export class IngressService {
 	// 저장은 끝났으므로 큐 적재가 실패해도 받은 것으로 답한다. 큐에 못 들어간 delivery는 sweeper(8. delivery)가 다시 넣는다
 	private async enqueue(deliveryIds: bigint[]): Promise<void> {
 		try {
-			await this.queue.enqueue(deliveryIds);
+			await this.queue.enqueue(deliveryIds.map((delivery_id) => ({ delivery_id, trigger: 'initial' as const })));
 		} catch (error) {
 			this.logger.error(`delivery ${deliveryIds.join(', ')} 큐 적재 실패: ${error instanceof Error ? error.message : String(error)}`);
 		}

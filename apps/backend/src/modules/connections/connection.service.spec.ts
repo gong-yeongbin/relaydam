@@ -2,6 +2,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import type { connection } from '@prisma/client';
 import { ConnectionService } from './connection.service';
 import type { ConnectionFilter, ConnectionRepository, RetryRule } from './ports/connection.repository';
+import type { HeldDeliveries } from './ports/held-deliveries';
 
 const PROJECT = 10;
 const NOW = new Date('2026-10-02T03:00:00Z');
@@ -71,13 +72,24 @@ async function errorOf(promise: Promise<unknown>) {
 	return { type: (error as object).constructor, code: ((error as NotFoundException).getResponse() as { code: string }).code };
 }
 
+class FakeHeld implements HeldDeliveries {
+	released: number[] = [];
+
+	release(connectionId: number) {
+		this.released.push(connectionId);
+		return Promise.resolve(0);
+	}
+}
+
 describe('ConnectionService', () => {
 	let repo: FakeConnections;
+	let held: FakeHeld;
 	let service: ConnectionService;
 
 	beforeEach(() => {
 		repo = new FakeConnections();
-		service = new ConnectionService(repo);
+		held = new FakeHeld();
+		service = new ConnectionService(repo, held);
 	});
 
 	it('create — 같은 project의 소스와 목적지를 잇는다. 재시도 설정을 안 보내면 2배씩·5분·9회다', async () => {
@@ -134,7 +146,10 @@ describe('ConnectionService', () => {
 		expect(await service.pause(PROJECT, id, NOW)).toMatchObject({ paused_at: NOW, retry_count: 3 });
 		expect(await service.pause(PROJECT, id, new Date(NOW.getTime() + 60_000))).toMatchObject({ paused_at: NOW });
 
+		expect(held.released).toEqual([]);
 		expect(await service.unpause(PROJECT, id)).toMatchObject({ paused_at: null, retry_count: 3 });
+		// 풀면 보류해 둔 전달을 이어서 보낸다
+		expect(held.released).toEqual([id]);
 		// 멈춰 있지 않을 때 풀어도 그대로다
 		expect(await service.unpause(PROJECT, id)).toMatchObject({ paused_at: null });
 	});

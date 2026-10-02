@@ -4,7 +4,7 @@ import { signatureConfigSchema } from '@/modules/sources/domain/signature-config
 import { usagePeriod } from './domain/usage-period';
 import { INGRESS_BODY_LIMIT } from '@/common/http/ingress-body';
 import { IngressService } from './ingress.service';
-import type { DeliveryQueue } from './ports/delivery.queue';
+import type { DeliveryQueue, QueuedDelivery } from '@/modules/deliveries/ports/delivery.queue';
 import type { IngressCounters } from './ports/ingress.counters';
 import type { IngressRepository, IngressSource, NewEvent, Rejection } from './ports/ingress.repository';
 
@@ -66,13 +66,20 @@ class FakeCounters implements IngressCounters {
 	}
 }
 
-class FakeQueue implements DeliveryQueue {
-	enqueued: bigint[] = [];
+// 인그레스는 enqueue만 쓴다. 나머지는 워커의 것이라 부르면 던진다
+class FakeQueue implements Pick<DeliveryQueue, 'enqueue'> {
+	items: QueuedDelivery[] = [];
 	fail = false;
 
-	enqueue(deliveryIds: bigint[]) {
+	get enqueued() {
+		return this.items.map((item) => item.delivery_id);
+	}
+	set enqueued(ids: bigint[]) {
+		this.items = ids.map((delivery_id) => ({ delivery_id }));
+	}
+	enqueue(items: QueuedDelivery[]) {
 		if (this.fail) return Promise.reject(new Error('valkey down'));
-		this.enqueued.push(...deliveryIds);
+		this.items.push(...items);
 		return Promise.resolve();
 	}
 }
@@ -98,7 +105,7 @@ describe('IngressService', () => {
 		repository = new FakeRepository();
 		counters = new FakeCounters();
 		queue = new FakeQueue();
-		service = new IngressService(repository, counters, queue);
+		service = new IngressService(repository, counters, queue as unknown as DeliveryQueue);
 	});
 
 	it('받은 웹훅을 저장하고 연결된 목적지마다 전달할 일을 큐에 넣는다', async () => {
@@ -126,6 +133,8 @@ describe('IngressService', () => {
 			},
 		]);
 		expect(queue.enqueued).toEqual([103n, 104n]);
+		// 처음 전달이라는 사유를 같이 넣는다
+		expect(queue.items.every((item) => item.trigger === 'initial')).toBe(true);
 		expect(counters.usage.get(usageKey)).toBe(1);
 		expect(repository.rejections).toEqual([]);
 	});
