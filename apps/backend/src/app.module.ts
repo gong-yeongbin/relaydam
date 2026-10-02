@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 import { CipherModule } from './infra/cipher/cipher.module';
 import { PrismaModule } from './infra/prisma/prisma.module';
+import { ValkeyModule } from './infra/valkey/valkey.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ConnectionModule } from './modules/connections/connection.module';
 import { DestinationModule } from './modules/destinations/destination.module';
@@ -31,6 +32,7 @@ import { UserModule } from './modules/users/user.module';
 			},
 		}),
 		PrismaModule,
+		ValkeyModule,
 		CipherModule,
 		AuthModule,
 		HealthModule,
