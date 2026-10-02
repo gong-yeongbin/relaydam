@@ -11,6 +11,7 @@ import {
 	UnauthorizedException,
 } from '@nestjs/common';
 import type { Prisma, RejectionReason } from '@prisma/client';
+import { INGRESS_BODY_LIMIT } from '@/common/http/ingress-body';
 import { INCLUDED_EVENTS } from '@/common/plan-limits';
 import { SLUG_LENGTH } from '@/modules/sources/domain/slug';
 import { idempotencyKey } from './domain/idempotency';
@@ -19,8 +20,6 @@ import { usagePeriod } from './domain/usage-period';
 import { DELIVERY_QUEUE, type DeliveryQueue } from './ports/delivery.queue';
 import { INGRESS_COUNTERS, type IngressCounters } from './ports/ingress.counters';
 import { INGRESS_REPOSITORY, type IngressRepository, type IngressSource } from './ports/ingress.repository';
-
-export const BODY_LIMIT = 256 * 1024;
 
 const SLUG = new RegExp(`^[a-z0-9]{${SLUG_LENGTH}}$`);
 
@@ -36,7 +35,8 @@ const RESPONSE: Record<RejectionReason, () => HttpException> = {
 	usage_exceeded: () => new HttpException({ code: 'usage_exceeded', message: '이번 달 무료 사용량을 넘었습니다.' }, HttpStatus.TOO_MANY_REQUESTS),
 };
 
-export type IncomingWebhook = { slug: string; headers: RequestHeaders; body: Buffer; now: Date };
+// size는 본문 크기다. 상한을 넘는 본문은 읽지 않으므로 그때 body는 비어 있고 size는 발신자가 선언한 크기다
+export type IncomingWebhook = { slug: string; headers: RequestHeaders; body: Buffer; size: number; now: Date };
 
 // Json 컬럼에는 undefined를 넣을 수 없다
 function definedHeaders(headers: RequestHeaders): Prisma.InputJsonObject {
@@ -63,7 +63,7 @@ export class IngressService {
 
 		if (source.suspended) return this.reject(source, 'project_suspended', webhook);
 		if (source.destination_ids.length === 0) return this.reject(source, 'no_connection', webhook);
-		if (webhook.body.length > BODY_LIMIT) return this.reject(source, 'payload_too_large', webhook);
+		if (webhook.size > INGRESS_BODY_LIMIT) return this.reject(source, 'payload_too_large', webhook);
 
 		if (source.signature_config && source.signing_secret !== null) {
 			const verified = verifySignature({ config: source.signature_config, secret: source.signing_secret, headers: webhook.headers, body: webhook.body, now: webhook.now });
@@ -105,7 +105,7 @@ export class IngressService {
 				source_id: source.id,
 				reason,
 				headers: definedHeaders(webhook.headers),
-				size: webhook.body.length,
+				size: webhook.size,
 			});
 		}
 		throw RESPONSE[reason]();

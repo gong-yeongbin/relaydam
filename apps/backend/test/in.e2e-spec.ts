@@ -133,14 +133,21 @@ describe('in (e2e) — 웹훅 수신', () => {
 		});
 	});
 
-	it('본문이 256KB를 넘으면 413 payload_too_large (거부 기록 남음). 1MiB를 넘으면 본문을 읽기 전에 끊는다 (기록 없음)', async () => {
+	it('본문은 10MiB까지 받는다. 넘으면 본문을 읽지 않고 413 payload_too_large로 답하고 거부 기록을 남긴다', async () => {
 		const target = await source(projectId, 1);
+		const LIMIT = 10 * 1024 * 1024;
 
-		expect(errorOf(await json(target.slug, 'a'.repeat(256 * 1024 + 1)).expect(413)).code).toBe('payload_too_large');
-		await json(target.slug, 'a'.repeat(256 * 1024)).expect(200);
+		const accepted = await t.http().post(`/in/${target.slug}`).set('Content-Type', 'application/octet-stream').send(Buffer.alloc(LIMIT, 0x61)).expect(200);
+		const stored = await t.prisma.event.findUniqueOrThrow({ where: { id: BigInt((accepted.body as { id: string }).id) }, select: { size: true } });
+		expect(stored.size).toBe(LIMIT);
 
-		expect(errorOf(await json(target.slug, 'a'.repeat(1024 * 1024 + 1)).expect(413)).code).toBe('payload_too_large');
-		expect((await rejectionsOf(target.id)).map((r) => ({ reason: r.reason, size: r.size }))).toEqual([{ reason: 'payload_too_large', size: 256 * 1024 + 1 }]);
+		const rejected = await t.http().post(`/in/${target.slug}`).set('Content-Type', 'application/octet-stream').send(Buffer.alloc(LIMIT + 1, 0x61)).expect(413);
+		expect(errorOf(rejected).code).toBe('payload_too_large');
+		expect(await eventsOf(target.id)).toBe(1);
+		expect((await rejectionsOf(target.id)).map((r) => ({ reason: r.reason, size: r.size }))).toEqual([{ reason: 'payload_too_large', size: LIMIT + 1 }]);
+
+		// 큰 본문을 버린 뒤에도 다음 요청을 정상으로 받는다
+		await json(target.slug, unique()).expect(200);
 	});
 
 	it('연결이 없는 소스는 409 no_connection. event 0건, 사용량 그대로', async () => {

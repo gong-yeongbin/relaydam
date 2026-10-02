@@ -109,8 +109,8 @@ RESTful하게 작성한다. 리소스는 URL, 행위는 HTTP 메서드로 표현
   port만 주입받는다(아키텍처 절).
 - 라우트마다 `@ApiOperation({ summary })` 한국어 한 줄, 오류는 `@ApiResponse` 상태별. Bearer는
   Swagger 전역 설정이라 라우트마다 붙이지 않는다.
-- 인그레스만 예외. raw body가 필요해 Fastify `rawBody`를 켜고, 256KB 상한과 Throttler를 컨트롤러에
-  건다. 그래도 컨트롤러는 service 호출 한 줄이다.
+- 인그레스만 예외. 본문을 파싱하지 않은 바이트 그대로 받는다(`common/http/ingress-body.ts`, 10MiB 상한).
+  컨트롤러는 `readIngressRequest(request)`로 읽어 service를 한 번 부른다. 그래도 한 줄이다.
 - 전역 설정(ValidationPipe, 예외 필터, BigInt 직렬화, Swagger)은 첫 엔드포인트 커밋에 같이 넣는다.
   `common/`에 두고 port 의존 없이 만든다. 가드는 membership 조회가 필요하므로 `modules/auth/`에
   두고 port만 주입받는다.

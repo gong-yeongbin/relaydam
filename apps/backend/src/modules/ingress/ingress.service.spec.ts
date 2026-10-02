@@ -2,7 +2,8 @@ import { createHash, createHmac } from 'node:crypto';
 import { type HttpException, Logger } from '@nestjs/common';
 import { signatureConfigSchema } from '@/modules/sources/domain/signature-config';
 import { usagePeriod } from './domain/usage-period';
-import { BODY_LIMIT, IngressService } from './ingress.service';
+import { INGRESS_BODY_LIMIT } from '@/common/http/ingress-body';
+import { IngressService } from './ingress.service';
 import type { DeliveryQueue } from './ports/delivery.queue';
 import type { IngressCounters } from './ports/ingress.counters';
 import type { IngressRepository, IngressSource, NewEvent, Rejection } from './ports/ingress.repository';
@@ -83,7 +84,9 @@ describe('IngressService', () => {
 	let service: IngressService;
 	const usageKey = `${ORG}:${usagePeriod(NOW)}`;
 	const receive = (body: string | Buffer = '{"order":1}', headers: Record<string, string | undefined> = { 'content-type': 'application/json' }, slug = SLUG) =>
-		service.receive({ slug, headers, body: Buffer.from(body), now: NOW });
+		service.receive({ slug, headers, body: Buffer.from(body), size: Buffer.byteLength(body), now: NOW });
+	// 상한을 넘는 본문은 읽지 않고 온다. body는 비어 있고 size만 선언된 크기다
+	const receiveOversize = (size = INGRESS_BODY_LIMIT + 1) => service.receive({ slug: SLUG, headers: { 'content-type': 'application/json' }, body: Buffer.alloc(0), size, now: NOW });
 
 	beforeEach(() => {
 		repository = new FakeRepository();
@@ -162,27 +165,26 @@ describe('IngressService', () => {
 			expectRejected('no_connection');
 		});
 
-		it('본문이 256KB를 넘으면 413 payload_too_large. 정확히 256KB는 받는다. 기록에 본문은 없고 크기만 남는다', async () => {
-			expect(await receive(Buffer.alloc(BODY_LIMIT))).toEqual({ id: 1n });
+		it('본문이 10MiB를 넘으면 413 payload_too_large. 정확히 10MiB는 받는다. 기록에 본문은 없고 크기만 남는다', async () => {
+			expect(await receive(Buffer.alloc(INGRESS_BODY_LIMIT))).toEqual({ id: 1n });
 			repository.events = [];
 			counters.usage.clear();
 			queue.enqueued = [];
 
-			expect(await errorOf(receive(Buffer.alloc(BODY_LIMIT + 1)))).toEqual({ status: 413, code: 'payload_too_large' });
+			expect(await errorOf(receiveOversize())).toEqual({ status: 413, code: 'payload_too_large' });
 			expectRejected('payload_too_large');
-			expect(repository.rejections[0]).toMatchObject({ size: BODY_LIMIT + 1 });
+			expect(repository.rejections[0]).toMatchObject({ size: INGRESS_BODY_LIMIT + 1 });
 			expect(repository.rejections[0]).not.toHaveProperty('body');
 		});
 
 		it('정지 → 연결 없음 → 본문 크기 → 서명 순서로 본다', async () => {
 			repository.source = { ...repository.source!, suspended: true, destination_ids: [], signing_secret: SECRET, signature_config: signatureConfigSchema.parse({ header: 'x-signature' }) };
-			const big = Buffer.alloc(BODY_LIMIT + 1);
 
-			expect((await errorOf(receive(big))).code).toBe('project_suspended');
+			expect((await errorOf(receiveOversize())).code).toBe('project_suspended');
 			repository.source.suspended = false;
-			expect((await errorOf(receive(big))).code).toBe('no_connection');
+			expect((await errorOf(receiveOversize())).code).toBe('no_connection');
 			repository.source.destination_ids = [3];
-			expect((await errorOf(receive(big))).code).toBe('payload_too_large');
+			expect((await errorOf(receiveOversize())).code).toBe('payload_too_large');
 			expect((await errorOf(receive('{}'))).code).toBe('invalid_signature');
 		});
 	});
@@ -246,7 +248,7 @@ describe('IngressService', () => {
 
 		it('달이 바뀌면 새 카운터로 센다', async () => {
 			await receive('{"n":1}');
-			await service.receive({ slug: SLUG, headers: {}, body: Buffer.from('{"n":2}'), now: new Date('2026-11-01T00:00:00+09:00') });
+			await service.receive({ slug: SLUG, headers: {}, body: Buffer.from('{"n":2}'), size: 7, now: new Date('2026-11-01T00:00:00+09:00') });
 			expect([...counters.usage.entries()]).toEqual([
 				[`${ORG}:202610`, 1],
 				[`${ORG}:202611`, 1],
