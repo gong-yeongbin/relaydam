@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { ConnectionModule } from './modules/connections/connection.module';
 import { DestinationModule } from './modules/destinations/destination.module';
 import { HealthModule } from './modules/health/health.module';
+import { IngressModule } from './modules/ingress/ingress.module';
 import { InvitationModule } from './modules/invitations/invitation.module';
 import { MemberModule } from './modules/members/member.module';
 import { OrgModule } from './modules/orgs/org.module';
@@ -44,6 +45,7 @@ import { UserModule } from './modules/users/user.module';
 		SourceModule,
 		DestinationModule,
 		ConnectionModule,
+		IngressModule,
 	],
 })
 export class AppModule {}

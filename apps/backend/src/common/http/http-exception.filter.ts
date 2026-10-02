@@ -16,13 +16,19 @@ const DEFAULT_ERRORS: Record<number, ErrorBody> = {
 	429: { code: 'rate_limited', message: '요청이 너무 많습니다.' },
 };
 const INTERNAL_ERROR: ErrorBody = { code: 'internal_error', message: '서버 오류가 발생했습니다.' };
+const BAD_REQUEST: ErrorBody = { code: 'bad_request', message: '요청을 처리할 수 없습니다.' };
 
 function isErrorBody(value: unknown): value is ErrorBody {
 	return typeof value === 'object' && value !== null && typeof (value as ErrorBody).code === 'string';
 }
 
 export function toErrorBody(exception: unknown): { status: number; body: ErrorBody } {
-	if (!(exception instanceof HttpException)) return { status: HttpStatus.INTERNAL_SERVER_ERROR, body: INTERNAL_ERROR };
+	if (!(exception instanceof HttpException)) {
+		// Fastify가 본문을 읽다가 낸 오류(상한 초과 413, 깨진 JSON 400 등)는 statusCode를 들고 온다
+		const status = (exception as { statusCode?: unknown } | null)?.statusCode;
+		if (typeof status === 'number' && status >= 400 && status < 500) return { status, body: DEFAULT_ERRORS[status] ?? BAD_REQUEST };
+		return { status: HttpStatus.INTERNAL_SERVER_ERROR, body: INTERNAL_ERROR };
+	}
 
 	const status = exception.getStatus();
 	const response = exception.getResponse();

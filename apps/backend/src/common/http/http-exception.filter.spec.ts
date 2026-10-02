@@ -18,6 +18,16 @@ describe('toErrorBody', () => {
 
 	it('HttpException이 아니면 500 internal_error', () => {
 		expect(toErrorBody(new Error('boom'))).toEqual({ status: 500, body: { code: 'internal_error', message: '서버 오류가 발생했습니다.' } });
+		expect(toErrorBody(null).status).toBe(500);
+		expect(toErrorBody(Object.assign(new Error('upstream'), { statusCode: 502 })).status).toBe(500);
+	});
+
+	it('Fastify가 본문을 읽다 낸 4xx 오류는 statusCode대로 낸다', () => {
+		const tooLarge = Object.assign(new Error('Request body is too large'), { statusCode: 413, code: 'FST_ERR_CTP_BODY_TOO_LARGE' });
+		expect(toErrorBody(tooLarge)).toEqual({ status: 413, body: { code: 'payload_too_large', message: '요청 본문이 너무 큽니다.' } });
+
+		const unsupported = Object.assign(new Error('Unsupported Media Type'), { statusCode: 415 });
+		expect(toErrorBody(unsupported)).toEqual({ status: 415, body: { code: 'bad_request', message: '요청을 처리할 수 없습니다.' } });
 	});
 });
 
