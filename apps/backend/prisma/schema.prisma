@@ -49,6 +49,27 @@ enum PaymentStatus {
   failed
 }
 
+// pending: 보낼 차례를 기다린다. failed: 실패했고 다시 보낼 예정이다. dead: 최대 시도를 넘겨 포기했다.
+// canceled: 목적지가 지워져 보내지 않고 닫았다. 전이는 8. delivery가 정한다.
+enum DeliveryStatus {
+  pending
+  succeeded
+  failed
+  dead
+  canceled
+}
+
+// 인그레스가 거부한 이유. 발신자에게는 서명 세부를 주지 않고 401만 준다. 세부는 여기에만 남는다.
+enum RejectionReason {
+  payload_too_large
+  project_suspended
+  no_connection
+  signature_missing
+  signature_mismatch
+  timestamp_out_of_range
+  usage_exceeded
+}
+
 // ─── 계정·테넌트 ─────────────────────────────────────────────────────────
 
 model organization {
@@ -120,8 +141,10 @@ model project {
   created_at      DateTime     @default(now()) @db.Timestamptz(3)
   updated_at      DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
 
-  sources      source[]
-  destinations destination[]
+  sources           source[]
+  destinations      destination[]
+  events            event[]
+  rejected_requests rejected_request[]
 
   @@index([organization_id])
 }
@@ -163,7 +186,9 @@ model source {
   created_at         DateTime @default(now()) @db.Timestamptz(3)
   updated_at         DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
-  connections connection[]
+  connections       connection[]
+  events            event[]
+  rejected_requests rejected_request[]
 
   @@index([project_id])
 }
@@ -185,6 +210,7 @@ model destination {
   updated_at   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
   connections connection[]
+  deliveries  delivery[]
 
   @@index([project_id])
 }
@@ -201,6 +227,71 @@ model connection {
 
   @@unique([source_id, destination_id])
   @@index([destination_id])
+}
+
+// ─── 수신 기록·전달 ──────────────────────────────────────────────────────
+
+// 받은 웹훅 한 건. 기록이자, 전달이 실패했을 때 다시 보내는 원본이다. 끝없이 늘어나 id는 BigInt다.
+// body는 받은 바이트 그대로다. 글자로 저장하면 UTF-8이 아닌 본문에서 저장이 실패하고, 목적지가 서명을
+// 직접 확인하려면 한 바이트도 달라지면 안 된다.
+// source를 지워도 event는 남는다(source_id NULL). 그래서 어느 project 것인지를 직접 가진다.
+// project를 지우면 같이 지워진다. 보존일이 지난 것은 배치가 지운다(8. delivery).
+// 같은 source에서 idempotency_key가 같으면 한 건으로 친다.
+model event {
+  id              BigInt   @id @default(autoincrement())
+  project         project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  project_id      Int
+  source          source?  @relation(fields: [source_id], references: [id], onDelete: SetNull)
+  source_id       Int?
+  idempotency_key String   @db.VarChar(255)
+  headers         Json
+  body            Bytes
+  content_type    String?  @db.VarChar(255)
+  size            Int
+  received_at     DateTime @default(now()) @db.Timestamptz(3)
+
+  deliveries delivery[]
+
+  @@unique([source_id, idempotency_key])
+  @@index([source_id, received_at])
+  @@index([project_id, id])
+}
+
+// event 한 건을 destination 한 곳에 보내는 일. 7. ingress는 pending으로 만들기만 하고 보내는 것은 8. delivery다.
+// destination을 지워도 남는다(destination_id NULL). 대기 중이던 건은 canceled로 닫는다.
+model delivery {
+  id               BigInt         @id @default(autoincrement())
+  event            event          @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  event_id         BigInt
+  destination      destination?   @relation(fields: [destination_id], references: [id], onDelete: SetNull)
+  destination_id   Int?
+  status           DeliveryStatus @default(pending)
+  attempt          Int            @default(0)
+  next_attempt_at  DateTime?      @db.Timestamptz(3)
+  last_status_code Int?
+  last_error       String?        @db.Text
+  created_at       DateTime       @default(now()) @db.Timestamptz(3)
+  updated_at       DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@index([event_id])
+  @@index([status, next_attempt_at])
+  @@index([destination_id, status])
+}
+
+// 인그레스가 거부한 요청. "왜 안 들어오는지"를 사용자가 확인하는 용도다. 본문은 저장하지 않고 헤더만 둔다.
+// 누구나 만들 수 있는 행이라 소스당 분당 상한 안에서만 저장한다. 사용량에 넣지 않는다.
+model rejected_request {
+  id          BigInt          @id @default(autoincrement())
+  project     project         @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  project_id  Int
+  source      source?         @relation(fields: [source_id], references: [id], onDelete: SetNull)
+  source_id   Int?
+  reason      RejectionReason
+  headers     Json
+  size        Int
+  received_at DateTime        @default(now()) @db.Timestamptz(3)
+
+  @@index([project_id, id])
 }
 
 // ─── 결제·사용량 ─────────────────────────────────────────────────────────

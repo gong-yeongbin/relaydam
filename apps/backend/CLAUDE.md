@@ -99,8 +99,9 @@ RESTful하게 작성한다. 리소스는 URL, 행위는 HTTP 메서드로 표현
 - 상태 코드. 400 `validation_failed`, 401 `unauthenticated`(토큰·키 없음·만료·폐기), 403
   `forbidden`·`plan_limit`, 404 `<리소스>_not_found`, 409 `<리소스>_conflict`(slug 중복 등),
   413 `payload_too_large`, 429 `rate_limited`·`usage_exceeded`.
-- 인그레스 `/in/:slug`의 서명 실패는 401 `invalid_signature`, 소스 없음은 404. 발신자에게
-  존재 여부 이상을 알려주지 않는다.
+- 인그레스 `/in/:slug`의 서명 실패는 401 `invalid_signature`, 소스 없음은 404, 정지된 project는 403
+  `project_suspended`, 연결 없는 소스는 409 `no_connection`. 발신자에게 그 이상을 알려주지 않는다.
+  거부 사유의 세부(서명 헤더 없음·불일치·시각 초과)는 거부 기록에만 남긴다.
 
 ### 컨트롤러 계층
 
