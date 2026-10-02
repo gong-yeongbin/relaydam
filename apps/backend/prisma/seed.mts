@@ -103,6 +103,7 @@ async function seedGateway(): Promise<void> {
 							signature_config: {
 								header: 'x-hub-signature-256',
 								encoding: 'hex',
+								secret_encoding: 'utf8',
 								prefix: 'sha256=',
 								signed_payload: '{body}',
 								tolerance_sec: 300,

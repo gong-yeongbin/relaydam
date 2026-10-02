@@ -25,7 +25,7 @@ export class CreateSourceDto {
 
 	@ApiPropertyOptional({
 		description:
-			'HMAC-SHA256 서명 검증 설정. header(필수), encoding(hex|base64, 기본 hex), prefix, signed_payload(기본 {body}. {header:이름}도 쓸 수 있다), ' +
+			'HMAC-SHA256 서명 검증 설정. header(필수), encoding(hex|base64, 기본 hex), secret_encoding(utf8|base64, 기본 utf8), prefix, signed_payload(기본 {body}. {header:이름}도 쓸 수 있다), ' +
 			'timestamp_header, tolerance_sec(기본 300), event_id_header. signing_secret과 함께 보낸다. 둘 다 없으면 검증 없이 받는다. 수정에서 null이면 지운다',
 		type: Object,
 		nullable: true,

@@ -12,7 +12,7 @@ describe('PrismaSourceRepository (통합)', () => {
 	const cipher = new CipherService(config);
 	const sources = new PrismaSourceRepository(prisma, cipher);
 	const allow: CreateCheck = () => undefined;
-	const CONFIG = { header: 'x-signature', encoding: 'hex' as const, signed_payload: '{body}', tolerance_sec: 300 };
+	const CONFIG = { header: 'x-signature', encoding: 'hex' as const, secret_encoding: 'utf8' as const, signed_payload: '{body}', tolerance_sec: 300 };
 	const open = (name: string) => ({ name, slug: newSlug(), signing_secret: null, signature_config: null });
 	let orgId: number;
 	let projectId: number;

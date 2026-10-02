@@ -21,6 +21,9 @@ export const signatureConfigSchema = z.strictObject({
 	// 서명이 담긴 헤더
 	header: headerName,
 	encoding: z.enum(['hex', 'base64']).default('hex'),
+	// 시크릿을 HMAC 키로 바꾸는 방법. utf8은 글자 그대로, base64는 디코딩한 바이트가 키다.
+	// Standard Webhooks 규격(포트원 V2, Svix)은 `whsec_` 뒤가 base64 키라 base64로 둔다
+	secret_encoding: z.enum(['utf8', 'base64']).default('utf8'),
 	// 서명 값 앞에 붙는 문자열. 예: GitHub `sha256=`
 	prefix: z.string().max(32).optional(),
 	signed_payload: signedPayload.default('{body}'),

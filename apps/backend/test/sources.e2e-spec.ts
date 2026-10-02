@@ -58,6 +58,7 @@ describe('sources (e2e)', () => {
 		expect(created.signature_config).toEqual({
 			header: 'x-hub-signature-256',
 			encoding: 'hex',
+			secret_encoding: 'utf8',
 			prefix: 'sha256=',
 			signed_payload: '{body}',
 			tolerance_sec: 300,

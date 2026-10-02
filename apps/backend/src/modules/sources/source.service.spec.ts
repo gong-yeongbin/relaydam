@@ -4,7 +4,7 @@ import type { CreateCheck, Signature, SourceRepository, SourceView } from './por
 import { SourceService } from './source.service';
 
 const PROJECT = 10;
-const CONFIG = { header: 'x-signature', encoding: 'hex' as const, signed_payload: '{body}', tolerance_sec: 300 };
+const CONFIG = { header: 'x-signature', encoding: 'hex' as const, secret_encoding: 'utf8' as const, signed_payload: '{body}', tolerance_sec: 300 };
 
 // port를 in-memory fake로 둔다. 시크릿은 평문 그대로 들고 있는다(암호화는 adapter 몫)
 class FakeSources implements SourceRepository {
