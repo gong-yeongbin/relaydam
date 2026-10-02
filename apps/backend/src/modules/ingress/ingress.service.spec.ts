@@ -114,6 +114,7 @@ describe('IngressService', () => {
 				path: '',
 				query: '',
 				source_ip: '203.0.113.7',
+				verified: false,
 				// undefined인 헤더는 저장하지 않는다
 				headers: { 'content-type': 'application/json', 'x-toss': 'a' },
 				body: Buffer.from(body),
@@ -244,6 +245,7 @@ describe('IngressService', () => {
 		it('서명이 맞으면 받고, 이벤트 ID 헤더를 멱등 키로 쓴다', async () => {
 			expect(await receive(body, { 'x-signature': sign(body), 'x-event-id': 'evt_1' })).toEqual({ id: 1n });
 			expect(repository.events[0]!.idempotency_key).toBe('id:evt_1');
+			expect(repository.events[0]!.verified).toBe(true);
 
 			// 본문이 달라도 이벤트 ID가 같으면 같은 웹훅이다
 			const other = '{"order":1,"retry":true}';

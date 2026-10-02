@@ -279,6 +279,8 @@ model event {
   query           String   @default("") @db.Text
   // 보낸 쪽 IP. X-Relaydam-Original-Ip로 넘긴다
   source_ip       String?  @db.VarChar(45)
+  // 받을 때 서명을 확인했는가. 서명 검증이 꺼진 소스로 받았으면 false. X-Relaydam-Verified로 넘긴다
+  verified        Boolean  @default(false)
   headers         Json
   body            Bytes
   content_type    String?  @db.VarChar(255)

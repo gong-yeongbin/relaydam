@@ -28,6 +28,7 @@ describe('PrismaIngressRepository (통합)', () => {
 		path: '',
 		query: '',
 		source_ip: null,
+		verified: false,
 		headers: { 'content-type': 'application/json' },
 		body: Buffer.from('{"order":1}'),
 		content_type: 'application/json',
@@ -74,14 +75,14 @@ describe('PrismaIngressRepository (통합)', () => {
 
 	it('storeEvent — event 한 줄과 목적지마다 pending delivery를 만든다. 본문은 받은 바이트 그대로다', async () => {
 		const body = Buffer.from([0xff, 0xfe, 0x00, 0x7b, 0x7d]);
-		const stored = await repository.storeEvent(event({ body, content_type: null, method: 'PUT', path: '/orders/42', query: 'v=2', source_ip: '203.0.113.7' }));
+		const stored = await repository.storeEvent(event({ body, content_type: null, method: 'PUT', path: '/orders/42', query: 'v=2', source_ip: '203.0.113.7', verified: true }));
 		expect(stored.duplicate).toBe(false);
 		expect(stored.delivery_ids).toHaveLength(2);
 
 		const row = await prisma.event.findUniqueOrThrow({ where: { id: stored.event_id }, include: { deliveries: true } });
 		expect(Buffer.from(row.body).equals(body)).toBe(true);
 		expect(row).toMatchObject({ project_id: projectId, source_id: sourceId, size: 5, content_type: null, headers: { 'content-type': 'application/json' } });
-		expect(row).toMatchObject({ method: 'PUT', path: '/orders/42', query: 'v=2', source_ip: '203.0.113.7' });
+		expect(row).toMatchObject({ method: 'PUT', path: '/orders/42', query: 'v=2', source_ip: '203.0.113.7', verified: true });
 		// delivery마다 어느 연결에서 만들어졌는지 남는다
 		expect(row.deliveries.map((d) => ({ id: d.connection_id, destination_id: d.destination_id })).sort((a, b) => a.id! - b.id!)).toEqual([...connections].sort((a, b) => a.id - b.id));
 		expect(row.deliveries.map((d) => d.id).sort()).toEqual([...stored.delivery_ids].sort());

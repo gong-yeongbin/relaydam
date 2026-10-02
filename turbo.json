@@ -10,7 +10,8 @@
 		"GOOGLE_CLIENT_ID",
 		"APP_URL",
 		"MAIL_FROM",
-		"ENCRYPTION_KEY"
+		"ENCRYPTION_KEY",
+		"ALLOW_PRIVATE_DESTINATIONS"
 	],
 	"tasks": {
 		"build": {

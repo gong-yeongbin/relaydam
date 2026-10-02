@@ -13,5 +13,7 @@ process.env.JWT_SECRET ??= 'test-jwt-secret';
 process.env.GOOGLE_CLIENT_ID ??= 'test-google-client-id';
 process.env.APP_URL ??= 'http://localhost:5173';
 process.env.MAIL_FROM ??= 'no-reply@relaydam.local';
+// 테스트의 가짜 목적지 서버가 127.0.0.1에 뜬다. 내부망 차단은 그것을 따로 보는 테스트에서 끈 값으로 확인한다
+process.env.ALLOW_PRIVATE_DESTINATIONS ??= 'true';
 // 테스트 전용 고정 키(32바이트). 운영 키와 무관하다.
 process.env.ENCRYPTION_KEY ??= Buffer.alloc(32, 7).toString('base64');

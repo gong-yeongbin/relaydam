@@ -82,6 +82,7 @@ export class IngressService {
 		if (source.connections.length === 0) return this.reject(source, 'no_connection', webhook);
 		if (webhook.size > INGRESS_BODY_LIMIT) return this.reject(source, 'payload_too_large', webhook);
 
+		const signed = source.signature_config !== null && source.signing_secret !== null;
 		if (source.signature_config && source.signing_secret !== null) {
 			const verified = verifySignature({ config: source.signature_config, secret: source.signing_secret, headers: webhook.headers, body: webhook.body, now: webhook.now });
 			if (verified !== 'ok') return this.reject(source, verified, webhook);
@@ -100,6 +101,7 @@ export class IngressService {
 			path: webhook.path,
 			query: webhook.query,
 			source_ip: webhook.source_ip,
+			verified: signed,
 			headers: definedHeaders(webhook.headers),
 			body: webhook.body,
 			content_type: typeof contentType === 'string' ? contentType : null,

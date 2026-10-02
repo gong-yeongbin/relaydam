@@ -23,6 +23,8 @@ export type NewEvent = {
 	path: string;
 	query: string;
 	source_ip: string | null;
+	// 받을 때 서명을 확인했는가
+	verified: boolean;
 	headers: Prisma.InputJsonObject;
 	body: Buffer;
 	content_type: string | null;
