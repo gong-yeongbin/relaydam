@@ -3,6 +3,7 @@ import { DeliveryWorker } from './delivery.worker';
 import type { DeliveryQueue } from './ports/delivery.queue';
 import type { AttemptRecord, DeliveryContext, DeliveryOutcome, DeliveryRepository } from './ports/delivery.repository';
 import type { DestinationClient, DestinationRequest, DestinationResponse } from './ports/destination.client';
+import type { CircuitCheck, DestinationGuard } from './ports/destination.guard';
 
 const NOW = new Date('2026-10-02T03:00:00Z');
 const MIN = 60_000;
@@ -12,7 +13,7 @@ const BODY = Buffer.from('{"order":1}');
 const MID = 0.5;
 
 // port를 in-memory fake로 둔다. 근거는 context-notes.md "계층별 테스트".
-class FakeDeliveries implements Pick<DeliveryRepository, 'load' | 'recordAttempt' | 'close'> {
+class FakeDeliveries implements Pick<DeliveryRepository, 'load' | 'recordAttempt' | 'close' | 'defer'> {
 	delivery: DeliveryContext | null = {
 		id: ID,
 		status: 'pending',
@@ -30,13 +31,14 @@ class FakeDeliveries implements Pick<DeliveryRepository, 'load' | 'recordAttempt
 			source_name: 'github',
 		},
 		project: { id: 10, organization_id: 1, suspended: false, signing_secret: 'rdsec_key' },
-		destination: { name: 'orders', url: 'https://api.example.com/webhooks', headers: { Authorization: 'Bearer token' }, timeout_ms: 5000, concurrency: 10 },
+		destination: { id: 7, name: 'orders', url: 'https://api.example.com/webhooks', headers: { Authorization: 'Bearer token' }, timeout_ms: 5000, concurrency: 10 },
 		// 기본값: 2배씩·5분·9회
 		connection: { retry_strategy: 'exponential', retry_interval_ms: 5 * MIN, retry_count: 9, paused: false },
 	};
 	attempts: AttemptRecord[] = [];
 	outcome: DeliveryOutcome | null = null;
 	closed: { status: string; error?: string } | null = null;
+	deferred: Date | null = null;
 	// 다른 워커가 먼저 처리한 상황
 	lostRace = false;
 
@@ -51,6 +53,40 @@ class FakeDeliveries implements Pick<DeliveryRepository, 'load' | 'recordAttempt
 	}
 	close(_id: bigint, status: 'held' | 'canceled' | 'dead', error?: string) {
 		this.closed = { status, error };
+		return Promise.resolve();
+	}
+	defer(_id: bigint, at: Date) {
+		this.deferred = at;
+		return Promise.resolve();
+	}
+}
+
+// 목적지 보호 상태를 그대로 돌려주는 fake. 잡고 놓은 자리와 성공·실패 기록을 남긴다
+class FakeGuard implements DestinationGuard {
+	check: CircuitCheck = { state: 'closed' };
+	full = false;
+	acquired: { id: number; limit: number; holdMs: number }[] = [];
+	released: string[] = [];
+	recorded: ('success' | 'failure')[] = [];
+
+	acquire(id: number, limit: number, holdMs: number) {
+		if (this.full) return Promise.resolve(null);
+		this.acquired.push({ id, limit, holdMs });
+		return Promise.resolve(`slot-${this.acquired.length}`);
+	}
+	release(_id: number, token: string) {
+		this.released.push(token);
+		return Promise.resolve();
+	}
+	circuit() {
+		return Promise.resolve(this.check);
+	}
+	recordSuccess() {
+		this.recorded.push('success');
+		return Promise.resolve();
+	}
+	recordFailure() {
+		this.recorded.push('failure');
 		return Promise.resolve();
 	}
 }
@@ -78,6 +114,7 @@ describe('DeliveryWorker', () => {
 	let deliveries: FakeDeliveries;
 	let client: FakeClient;
 	let queue: FakeQueue;
+	let guard: FakeGuard;
 	let worker: DeliveryWorker;
 	const run = (trigger?: 'manual' | 'unpause' | 'bulk_retry') => worker.process({ delivery_id: ID, trigger }, NOW, MID);
 	const fail = (response: Partial<{ status_code: number; retry_after: string; error: string }>) => {
@@ -88,7 +125,8 @@ describe('DeliveryWorker', () => {
 		deliveries = new FakeDeliveries();
 		client = new FakeClient();
 		queue = new FakeQueue();
-		worker = new DeliveryWorker(deliveries as unknown as DeliveryRepository, client, queue as unknown as DeliveryQueue, 'https://app.relaydam.io');
+		guard = new FakeGuard();
+		worker = new DeliveryWorker(deliveries as unknown as DeliveryRepository, client, queue as unknown as DeliveryQueue, guard, 'https://app.relaydam.io');
 	});
 
 	describe('보내는 요청', () => {
@@ -152,6 +190,7 @@ describe('DeliveryWorker', () => {
 			expect(deliveries.attempts).toEqual([{ attempt_no: 1, trigger: 'initial', status_code, error: null, duration_ms: 12, response_body: 'ok' }]);
 			expect(deliveries.outcome).toEqual({ status: 'succeeded', next_attempt_at: null, last_status_code: status_code, last_error: null });
 			expect(queue.scheduled).toEqual([]);
+			expect(guard.recorded).toEqual(['success']);
 		});
 	});
 
@@ -164,6 +203,7 @@ describe('DeliveryWorker', () => {
 			expect(deliveries.attempts[0]).toMatchObject({ attempt_no: 1, status_code, error: null, response_body: 'no' });
 			expect(deliveries.outcome).toEqual({ status: 'failed', next_attempt_at: retryAt, last_status_code: status_code, last_error: null });
 			expect(queue.scheduled).toEqual([{ id: ID, at: retryAt }]);
+			expect(guard.recorded).toEqual(['failure']);
 		});
 
 		it('응답을 못 받으면(타임아웃, 연결 실패, 내부망 차단) 오류를 남기고 재시도한다', async () => {
@@ -219,11 +259,68 @@ describe('DeliveryWorker', () => {
 		});
 	});
 
+	describe('목적지 보호', () => {
+		// random 0.5면 미루는 간격은 1초 + 2초 = 3초
+		const DEFER = 3_000;
+		const expectDeferred = (at: Date) => {
+			expect(client.requests).toEqual([]);
+			expect(deliveries.attempts).toEqual([]);
+			expect(deliveries.closed).toBeNull();
+			expect(deliveries.deferred).toEqual(at);
+			expect(queue.scheduled).toEqual([{ id: ID, at }]);
+			expect(guard.recorded).toEqual([]);
+		};
+
+		it('목적지의 동시 전달 자리를 타임아웃 + 5초 동안 잡고, 보낸 뒤 놓는다', async () => {
+			await run();
+			expect(guard.acquired).toEqual([{ id: 7, limit: 10, holdMs: 10_000 }]);
+			expect(guard.released).toEqual(['slot-1']);
+		});
+
+		it('client가 던져도 자리를 놓는다', async () => {
+			client.send = () => Promise.reject(new Error('boom'));
+			await expect(run()).rejects.toThrow('boom');
+			expect(guard.released).toEqual(['slot-1']);
+		});
+
+		it('자리가 다 찼으면 보내지 않고 1~5초 뒤로 미룬다. 시도 횟수를 쓰지 않는다', async () => {
+			guard.full = true;
+			expect(await run()).toBe('deferred');
+			expectDeferred(new Date(NOW.getTime() + DEFER));
+		});
+
+		it('서킷이 열려 있으면 풀리는 시각 + 1~5초 뒤로 미룬다. 자리를 잡지 않는다', async () => {
+			guard.check = { state: 'open', remaining_ms: 42_000 };
+			expect(await run()).toBe('deferred');
+			expectDeferred(new Date(NOW.getTime() + 42_000 + DEFER));
+			expect(guard.acquired).toEqual([]);
+		});
+
+		it('half_open이면 프로브를 잡은 워커만 보내고, 못 잡았으면 1~5초 뒤로 미룬다', async () => {
+			guard.check = { state: 'half_open', probe: false };
+			expect(await run()).toBe('deferred');
+			expectDeferred(new Date(NOW.getTime() + DEFER));
+
+			guard.check = { state: 'half_open', probe: true };
+			expect(await run()).toBe('succeeded');
+			expect(client.requests).toHaveLength(1);
+			expect(guard.recorded).toEqual(['success']);
+		});
+
+		it('다른 워커가 먼저 처리해 기록을 남기지 못해도 보낸 결과는 서킷에 반영한다', async () => {
+			deliveries.lostRace = true;
+			fail({ status_code: 500 });
+			expect(await run()).toBe('skipped');
+			expect(guard.recorded).toEqual(['failure']);
+		});
+	});
+
 	describe('보내지 않는 경우', () => {
 		const expectNotSent = () => {
 			expect(client.requests).toEqual([]);
 			expect(deliveries.attempts).toEqual([]);
 			expect(queue.scheduled).toEqual([]);
+			expect(guard.acquired).toEqual([]);
 		};
 
 		it('delivery가 없으면(지워짐) 아무것도 하지 않는다', async () => {
@@ -245,7 +342,7 @@ describe('DeliveryWorker', () => {
 			expect(await run()).toBe('canceled');
 			expect(deliveries.closed).toEqual({ status: 'canceled', error: undefined });
 
-			deliveries.delivery!.destination = { name: 'd', url: 'https://x.example', headers: {}, timeout_ms: 1000, concurrency: 1 };
+			deliveries.delivery!.destination = { id: 7, name: 'd', url: 'https://x.example', headers: {}, timeout_ms: 1000, concurrency: 1 };
 			deliveries.delivery!.connection = null;
 			expect(await run()).toBe('canceled');
 			expectNotSent();

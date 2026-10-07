@@ -37,7 +37,7 @@ export class PrismaDeliveryRepository implements DeliveryRepository {
 						project: { select: { id: true, organization_id: true, suspended_at: true, signing_secret_enc: true } },
 					},
 				},
-				destination: { select: { name: true, url: true, headers_enc: true, timeout_ms: true, concurrency: true } },
+				destination: { select: { id: true, name: true, url: true, headers_enc: true, timeout_ms: true, concurrency: true } },
 				connection: { select: { retry_strategy: true, retry_interval_ms: true, retry_count: true, paused_at: true } },
 			},
 		});
@@ -67,6 +67,7 @@ export class PrismaDeliveryRepository implements DeliveryRepository {
 				signing_secret: await this.signingSecret(event.project.id, event.project.signing_secret_enc),
 			},
 			destination: destination && {
+				id: destination.id,
 				name: destination.name,
 				url: destination.url,
 				headers: destination.headers_enc === null ? {} : headersSchema.parse(JSON.parse(this.cipher.decrypt(destination.headers_enc))),
@@ -96,6 +97,10 @@ export class PrismaDeliveryRepository implements DeliveryRepository {
 
 	async close(id: bigint, status: 'held' | 'canceled' | 'dead', error?: string): Promise<void> {
 		await this.prisma.delivery.updateMany({ where: { id, status: { in: [...OPEN] } }, data: { status, next_attempt_at: null, last_error: error } });
+	}
+
+	async defer(id: bigint, at: Date): Promise<void> {
+		await this.prisma.delivery.updateMany({ where: { id, status: { in: [...OPEN] } }, data: { next_attempt_at: at } });
 	}
 
 	async findStale(now: Date, staleMs: number, limit: number): Promise<bigint[]> {

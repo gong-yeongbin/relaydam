@@ -23,7 +23,7 @@ export type DeliveryContext = {
 	};
 	project: { id: number; organization_id: number; suspended: boolean; signing_secret: string };
 	// 목적지나 연결이 지워졌으면 null. 그 delivery는 보내지 않고 닫는다
-	destination: { name: string; url: string; headers: Record<string, string>; timeout_ms: number; concurrency: number } | null;
+	destination: { id: number; name: string; url: string; headers: Record<string, string>; timeout_ms: number; concurrency: number } | null;
 	connection: (RetryRule & { paused: boolean }) | null;
 };
 
@@ -52,6 +52,9 @@ export interface DeliveryRepository {
 	recordAttempt(id: bigint, attemptBefore: number, attempt: AttemptRecord, outcome: DeliveryOutcome): Promise<boolean>;
 	// 보내지 않고 닫는다. 아직 pending·failed일 때만 바꾼다
 	close(id: bigint, status: 'held' | 'canceled' | 'dead', error?: string): Promise<void>;
+	// 보내지 않고 at 시각으로 미룬다(목적지 자리가 없거나 서킷이 열렸을 때). 시도 횟수는 그대로다.
+	// 기록해 두지 않으면 sweeper가 "예약이 사라졌다"고 보고 큐에 또 넣는다
+	defer(id: bigint, at: Date): Promise<void>;
 	// 큐에 있어야 하는데 staleMs 넘게 처리되지 않은 것(큐 적재가 빠졌거나 예약이 사라진 경우).
 	// 돌려준 것은 방금 본 것으로 표시해, 큐에서 차례를 기다리는 동안 매번 다시 나오지 않게 한다
 	findStale(now: Date, staleMs: number, limit: number): Promise<bigint[]>;

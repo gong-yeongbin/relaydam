@@ -14,6 +14,7 @@ import type { DeliveryRepository } from '../ports/delivery.repository';
 import { NodeDestinationClient } from './node-destination.client';
 import { PrismaDeliveryRepository } from './prisma-delivery.repository';
 import { ValkeyDeliveryQueue } from './valkey-delivery.queue';
+import { ValkeyDestinationGuard, guardKeys } from './valkey-destination.guard';
 
 type Received = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
 
@@ -33,7 +34,8 @@ describe('전달 워커 (통합)', () => {
 	const keys = { stream: `test:delivery:${run}`, group: 'workers', scheduled: `test:delivery:scheduled:${run}` };
 	const queue = new ValkeyDeliveryQueue(valkey, keys);
 	const deliveries = new PrismaDeliveryRepository(prisma, cipher);
-	const worker = new DeliveryWorker(deliveries, new NodeDestinationClient(config), queue, 'https://app.relaydam.io');
+	const guard = new ValkeyDestinationGuard(valkey);
+	const worker = new DeliveryWorker(deliveries, new NodeDestinationClient(config), queue, guard, 'https://app.relaydam.io');
 	const runner = new DeliveryRunner(worker, queue, deliveries);
 	// sweeper는 DB 전체에서 오래된 것을 찾는다. 같은 DB의 다른 데이터(개발용, 다른 테스트)가 이 테스트의 큐로
 	// 들어오지 않게, 이 테스트가 만든 delivery만 다시 넣는 runner를 따로 둔다
@@ -42,6 +44,7 @@ describe('전달 워커 (통합)', () => {
 		load: (id) => deliveries.load(id),
 		recordAttempt: (...args) => deliveries.recordAttempt(...args),
 		close: (...args) => deliveries.close(...args),
+		defer: (...args) => deliveries.defer(...args),
 		findStale: async (...args) => (await deliveries.findStale(...args)).filter((id) => mine.has(id)),
 	};
 	const sweeping = new DeliveryRunner(worker, queue, scopedRepository);
@@ -58,12 +61,16 @@ describe('전달 워커 (통합)', () => {
 	let projectId: number;
 	let sourceId: number;
 
+	// 이 테스트가 만든 목적지. 끝나면 Valkey의 보호 상태 키를 지운다
+	const destinations = new Set<number>();
+
 	// 목적지와 연결을 하나씩 만들고, 그 연결로 가는 pending delivery가 달린 event를 만든다
-	async function setup(options: { retry?: { retry_strategy?: 'linear' | 'exponential'; retry_interval_ms?: number; retry_count?: number }; event?: object; headers?: object } = {}) {
+	async function setup(options: { retry?: { retry_strategy?: 'linear' | 'exponential'; retry_interval_ms?: number; retry_count?: number }; event?: object; headers?: object; concurrency?: number } = {}) {
 		const source = await prisma.source.create({ data: { project_id: projectId, slug: newSlug(), name: '토스 결제' } });
 		const destination = await prisma.destination.create({
-			data: { project_id: projectId, name: 'orders', url: `${base}/webhooks`, timeout_ms: 2000, headers_enc: cipher.encrypt(JSON.stringify(options.headers ?? { Authorization: 'Bearer destination-token' })) },
+			data: { project_id: projectId, name: 'orders', url: `${base}/webhooks`, timeout_ms: 2000, concurrency: options.concurrency, headers_enc: cipher.encrypt(JSON.stringify(options.headers ?? { Authorization: 'Bearer destination-token' })) },
 		});
+		destinations.add(destination.id);
 		const connection = await prisma.connection.create({ data: { source_id: source.id, destination_id: destination.id, retry_strategy: 'linear', retry_interval_ms: 1000, retry_count: 2, ...options.retry } });
 		const event = await prisma.event.create({
 			data: {
@@ -83,6 +90,13 @@ describe('전달 워커 (통합)', () => {
 		sourceId = source.id;
 		mine.add(delivery.id);
 		return { source, destination, connection, event, delivery };
+	}
+	// 같은 소스·목적지·연결로 가는 delivery를 하나 더 만든다
+	async function another(fixture: Awaited<ReturnType<typeof setup>>) {
+		const event = await prisma.event.create({ data: { project_id: projectId, source_id: fixture.source.id, idempotency_key: `id:${randomUUID()}`, headers: {}, body: new Uint8Array(BODY), size: BODY.length } });
+		const delivery = await prisma.delivery.create({ data: { event_id: event.id, destination_id: fixture.destination.id, connection_id: fixture.connection.id } });
+		mine.add(delivery.id);
+		return delivery.id;
 	}
 	const state = (id: bigint) => prisma.delivery.findUniqueOrThrow({ where: { id }, include: { attempts: { orderBy: { attempt_no: 'asc' } } } });
 	const enqueue = (id: bigint) => queue.enqueue([{ delivery_id: id, trigger: 'initial' }]);
@@ -117,7 +131,7 @@ describe('전달 워커 (통합)', () => {
 		// source·destination·event·delivery·attempt는 project를 지우면 같이 지워진다(FK cascade)
 		await prisma.project.deleteMany({ where: { organization_id: orgId } });
 		await prisma.organization.deleteMany({ where: { id: orgId } });
-		await valkey.del(keys.stream, keys.scheduled);
+		await valkey.del(keys.stream, keys.scheduled, ...[...destinations].flatMap((id) => Object.values(guardKeys(id))));
 		await queue.onModuleDestroy();
 		await valkey.onModuleDestroy();
 		await prisma.$disconnect();
@@ -354,6 +368,124 @@ describe('전달 워커 (통합)', () => {
 		const secret = cipher.decrypt(stored!);
 		expect(secret).toMatch(/^rdsec_/);
 		expect(received[0]!.headers['x-relaydam-signature']).toBe(createHmac('sha256', secret).update(BODY).digest('base64'));
+	});
+
+	describe('목적지 보호', () => {
+		const statuses = (ids: bigint[]) => prisma.delivery.findMany({ where: { id: { in: ids } }, select: { status: true, attempt: true } });
+		// 미룬 것이 시각이 될 때까지 기다리지 않고 바로 옮겨 다시 처리한다
+		const again = async () => {
+			await runner.runScheduler(FAR());
+			await consume();
+		};
+		// 스케줄러를 앞당기면 앞 테스트가 예약해 둔 것도 같이 큐로 온다. 목적지 헤더로 이 테스트의 요청만 센다
+		let tag: string;
+		const isMine = (headers: http.IncomingHttpHeaders) => headers['x-fixture'] === tag;
+		const sent = () => received.filter((r) => isMine(r.headers));
+		// 큐에 남은 것을 다 처리해 다음 테스트가 빈 큐에서 시작하게 한다
+		const drain = async () => {
+			while ((await consume()) > 0) {
+				// 비울 때까지
+			}
+		};
+
+		beforeEach(() => {
+			tag = randomUUID();
+		});
+		afterEach(drain);
+
+		it('동시 20건에 concurrency 2 → 목적지에는 한 번에 2건만 간다. 나머지는 미뤘다가 보낸다', async () => {
+			let inflight = 0;
+			let maxInflight = 0;
+			respond = (incoming, response) => {
+				const counted = isMine(incoming.headers);
+				if (counted) maxInflight = Math.max(maxInflight, ++inflight);
+				setTimeout(() => {
+					if (counted) inflight--;
+					response.writeHead(200).end('ok');
+				}, 100);
+			};
+			const fixture = await setup({ concurrency: 2, headers: { 'x-fixture': tag } });
+			const ids = [fixture.delivery.id];
+			for (let i = 1; i < 20; i++) ids.push(await another(fixture));
+			await queue.enqueue(ids.map((delivery_id) => ({ delivery_id })));
+
+			// 10건씩 두 묶음을 동시에 읽어 20건을 한꺼번에 처리한다
+			await Promise.all([consume(), consume()]);
+			expect(sent()).toHaveLength(2);
+			expect(maxInflight).toBe(2);
+			// 미룬 18건은 시도 횟수를 쓰지 않고 1~5초 뒤로 예약됐다
+			const deferred = (await statuses(ids)).filter((row) => row.status === 'pending');
+			expect(deferred).toHaveLength(18);
+			expect(deferred.every((row) => row.attempt === 0)).toBe(true);
+			for (const id of ids) {
+				const row = await state(id);
+				if (row.status !== 'pending') continue;
+				const delay = row.next_attempt_at!.getTime() - Date.now();
+				expect(delay).toBeGreaterThan(0);
+				expect(delay).toBeLessThanOrEqual(5_000);
+				expect(await valkey.zscore(keys.scheduled, id.toString())).toBe(String(row.next_attempt_at!.getTime()));
+			}
+
+			for (let round = 0; round < 12 && sent().length < 20; round++) {
+				await runner.runScheduler(FAR());
+				await Promise.all([consume(), consume()]);
+			}
+			expect(sent()).toHaveLength(20);
+			expect(maxInflight).toBe(2);
+			expect((await statuses(ids)).every((row) => row.status === 'succeeded' && row.attempt === 1)).toBe(true);
+			// 자리는 다 돌려줬다
+			expect(await valkey.zcard(guardKeys(fixture.destination.id).inflight)).toBe(0);
+		});
+
+		it('연속 5회 실패 → 60초 open(보내지 않고 미룬다) → 프로브 1건 실패면 다시 open, 성공이면 close', async () => {
+			respond = (_incoming, response) => response.writeHead(500).end('down');
+			const fixture = await setup({ retry: { retry_count: 10 }, headers: { 'x-fixture': tag } });
+			const circuit = guardKeys(fixture.destination.id);
+			const failing = [fixture.delivery.id];
+			for (let i = 1; i < 5; i++) failing.push(await another(fixture));
+			await queue.enqueue(failing.map((delivery_id) => ({ delivery_id })));
+			await consume();
+			expect(sent()).toHaveLength(5);
+			expect(await valkey.get(circuit.failures)).toBe('5');
+			const ttl = await valkey.pttl(circuit.open);
+			expect(ttl).toBeGreaterThan(55_000);
+			expect(ttl).toBeLessThanOrEqual(60_000);
+
+			// 열려 있는 동안 들어온 2건은 보내지 않고 풀리는 시각 뒤로 미룬다. 시도 횟수를 쓰지 않는다
+			const waiting = [await another(fixture), await another(fixture)];
+			await queue.enqueue(waiting.map((delivery_id) => ({ delivery_id })));
+			await consume();
+			expect(sent()).toHaveLength(5);
+			for (const id of waiting) {
+				const row = await state(id);
+				expect(row).toMatchObject({ status: 'pending', attempt: 0 });
+				const delay = row.next_attempt_at!.getTime() - Date.now();
+				expect(delay).toBeGreaterThan(55_000);
+				expect(delay).toBeLessThanOrEqual(65_000);
+				expect(await valkey.zscore(keys.scheduled, id.toString())).toBe(String(row.next_attempt_at!.getTime()));
+			}
+
+			// 60초를 기다리지 않고 열린 키를 지워 시간이 지난 것으로 한다. half_open에서는 프로브 자리를 잡은 하나만 보낸다
+			await valkey.del(circuit.open);
+			expect(await guard.circuit(fixture.destination.id)).toEqual({ state: 'half_open', probe: true });
+			expect(await guard.circuit(fixture.destination.id)).toEqual({ state: 'half_open', probe: false });
+			await valkey.del(circuit.probe);
+
+			// 프로브가 실패하면 다시 60초 연다. 같이 들어온 다른 건(7건 중 프로브 1건을 뺀 나머지)은 보내지 않는다
+			await again();
+			expect(sent()).toHaveLength(6);
+			expect(await valkey.get(circuit.failures)).toBe('6');
+			expect(await valkey.pttl(circuit.open)).toBeGreaterThan(55_000);
+			expect((await statuses([...failing, ...waiting])).reduce((sum, row) => sum + row.attempt, 0)).toBe(6);
+
+			// 목적지가 살아나면 프로브 1건이 성공해 닫히고, 그 뒤로는 그냥 보낸다
+			await valkey.del(circuit.open);
+			respond = (_incoming, response) => setTimeout(() => response.writeHead(200).end('ok'), 100);
+			for (let round = 0; round < 3 && (await statuses(waiting)).some((row) => row.status !== 'succeeded'); round++) await again();
+			expect((await statuses(waiting)).every((row) => row.status === 'succeeded')).toBe(true);
+			expect(await valkey.exists(circuit.failures, circuit.open, circuit.probe)).toBe(0);
+			expect(await guard.circuit(fixture.destination.id)).toEqual({ state: 'closed' });
+		});
 	});
 
 	describe('처리하다 죽은 항목', () => {
