@@ -57,6 +57,9 @@ class FakeQueue implements DeliveryQueue {
 	schedule() {
 		return Promise.resolve();
 	}
+	unschedule() {
+		return Promise.resolve();
+	}
 }
 
 const message = (id: bigint, times_delivered = 1): ReceivedDelivery => ({ message_id: `m-${id}`, delivery_id: id, times_delivered });

@@ -488,6 +488,26 @@ describe('전달 워커 (통합)', () => {
 		});
 	});
 
+	it('내부망 주소 목적지는 보내지 않고 blocked_address 실패로 기록한다(ALLOW_PRIVATE_DESTINATIONS가 true가 아님)', async () => {
+		// 가짜 목적지 서버가 127.0.0.1이라 평소 설정으로는 허용돼 있다. 차단이 켜진 client로 워커를 하나 더 둔다
+		const strict = new DeliveryWorker(deliveries, new NodeDestinationClient(new ConfigService({ ALLOW_PRIVATE_DESTINATIONS: 'false' })), queue, guard, 'https://app.relaydam.io');
+		const { delivery } = await setup();
+
+		expect(await strict.process({ delivery_id: delivery.id }, new Date(), 0.5)).toBe('failed');
+		expect(received).toHaveLength(0);
+		const after = await state(delivery.id);
+		expect(after).toMatchObject({ status: 'failed', attempt: 1, last_status_code: null, last_error: 'blocked_address' });
+		expect(after.attempts[0]).toMatchObject({ attempt_no: 1, status_code: null, error: 'blocked_address', response_body: null });
+	});
+
+	it('예약을 지우면(unschedule) 스케줄러가 옮기지 않는다', async () => {
+		const { delivery } = await setup();
+		await queue.schedule(delivery.id, new Date());
+		await queue.unschedule([delivery.id]);
+		await queue.unschedule([]);
+		expect(await valkey.zscore(keys.scheduled, delivery.id.toString())).toBeNull();
+	});
+
 	describe('처리하다 죽은 항목', () => {
 		// 처리 중에 던지는 워커. DB 장애나 프로세스 종료를 흉내 낸다
 		const broken = new DeliveryRunner({ process: () => Promise.reject(new Error('db down')) } as unknown as DeliveryWorker, queue, deliveries);

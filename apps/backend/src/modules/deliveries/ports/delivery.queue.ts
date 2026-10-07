@@ -14,6 +14,8 @@ export interface DeliveryQueue {
 	schedule(deliveryId: bigint, at: Date): Promise<void>;
 	// 시각이 된 예약을 꺼낸다. 꺼낸 것은 예약에서 빠진다
 	takeDue(now: Date, limit: number): Promise<bigint[]>;
+	// 예약을 지운다(수동 재시도·취소). 없으면 아무 일도 없다
+	unschedule(deliveryIds: bigint[]): Promise<void>;
 
 	// 아래는 워커가 쓴다
 	// 컨슈머 그룹이 없으면 만든다

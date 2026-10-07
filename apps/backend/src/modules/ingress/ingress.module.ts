@@ -15,5 +15,7 @@ import { INGRESS_REPOSITORY } from './ports/ingress.repository';
 		{ provide: INGRESS_REPOSITORY, useClass: PrismaIngressRepository },
 		{ provide: INGRESS_COUNTERS, useClass: ValkeyIngressCounters },
 	],
+	// 리플레이(modules/events)가 수신과 같은 사용량 카운터를 쓴다
+	exports: [INGRESS_COUNTERS],
 })
 export class IngressModule {}

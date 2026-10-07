@@ -56,6 +56,11 @@ export class ValkeyDeliveryQueue implements DeliveryQueue, OnModuleDestroy {
 		await this.valkey.zadd(this.keys.scheduled, at.getTime(), deliveryId.toString());
 	}
 
+	async unschedule(deliveryIds: bigint[]): Promise<void> {
+		if (deliveryIds.length === 0) return;
+		await this.valkey.zrem(this.keys.scheduled, ...deliveryIds.map(String));
+	}
+
 	async takeDue(now: Date, limit: number): Promise<bigint[]> {
 		const due = await this.valkey.zrangebyscore(this.keys.scheduled, 0, now.getTime(), 'LIMIT', 0, limit);
 		const taken: bigint[] = [];
