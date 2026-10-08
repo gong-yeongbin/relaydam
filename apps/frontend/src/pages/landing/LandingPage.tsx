@@ -1,4 +1,4 @@
-import { Button, Layout, Space, Typography } from 'antd';
+import { Button, Layout, Typography } from 'antd';
 import { Link, Navigate } from 'react-router';
 import { getToken } from '@/auth/token';
 import { colors } from '@/theme';
@@ -26,14 +26,9 @@ export function LandingPage() {
 				<Text strong style={{ fontSize: 20, letterSpacing: '-0.01em', color: colors.ink }}>
 					relaydam
 				</Text>
-				<Space size={16}>
-					<Link to="/login" style={{ color: colors.ink, fontSize: 15 }}>
-						로그인
-					</Link>
-					<Link to="/login">
-						<Button type="primary">시작하기</Button>
-					</Link>
-				</Space>
+				<Link to="/login">
+					<Button type="primary">로그인</Button>
+				</Link>
 			</Layout.Header>
 
 			<Layout.Content style={{ maxWidth: 1040, width: '100%', margin: '0 auto', padding: `88px 48px 96px`, textAlign: 'center' }}>
