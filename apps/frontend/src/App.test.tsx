@@ -1,10 +1,15 @@
-// App 루트 컴포넌트 렌더링 테스트
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { App } from './App';
 
 describe('App', () => {
-	it('앱 이름을 제목으로 보여준다', () => {
-		render(<App />);
-		expect(screen.getByRole('heading', { name: 'relaydam' })).toBeDefined();
+	it('/ 는 랜딩이다', () => {
+		localStorage.clear();
+		render(
+			<MemoryRouter initialEntries={['/']}>
+				<App />
+			</MemoryRouter>
+		);
+		expect(screen.getByRole('heading', { level: 1, name: '웹훅, 한 건도 잃지 않고 전달합니다' })).toBeDefined();
 	});
 });
