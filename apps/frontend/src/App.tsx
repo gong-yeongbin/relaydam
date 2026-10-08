@@ -1,4 +1,6 @@
-import { Route, Routes, useLocation } from 'react-router';
+import { Navigate, Route, Routes, useLocation } from 'react-router';
+import { RequireAuth } from './auth/RequireAuth';
+import { AppShell, Placeholder } from './layout/AppShell';
 import { LandingPage } from './pages/landing/LandingPage';
 import { LoginPage } from './pages/login/LoginPage';
 
@@ -10,6 +12,12 @@ export function App() {
 			<Routes>
 				<Route path="/" element={<LandingPage />} />
 				<Route path="/login" element={<LoginPage />} />
+				<Route element={<RequireAuth />}>
+					<Route path="/app" element={<AppShell />}>
+						<Route index element={<Navigate to="/app/events" replace />} />
+						<Route path="*" element={<Placeholder />} />
+					</Route>
+				</Route>
 			</Routes>
 		</div>
 	);

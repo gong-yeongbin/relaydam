@@ -10,3 +10,10 @@ window.matchMedia ??= (query: string) =>
 		removeEventListener: () => undefined,
 		dispatchEvent: () => false,
 	}) as MediaQueryList;
+
+// jsdom에는 ResizeObserver도 없다. antd Dropdown·Table이 쓴다
+window.ResizeObserver ??= class {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+};

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { setToken } from '@/auth/token';
 import { LoginPage } from './LoginPage';
@@ -21,6 +21,13 @@ describe('LoginPage', () => {
 		expect(screen.getByRole('link', { name: 'relaydam' }).getAttribute('href')).toBe('/');
 		expect(screen.getByRole('button', { name: /Google 계정으로 로그인/ })).toBeDefined();
 		expect(screen.getByText('처음이면 계정이 자동으로 만들어집니다')).toBeDefined();
+	});
+
+	it('버튼을 누르면 토큰을 저장하고 /app으로 간다 (구글 연동 전 임시)', () => {
+		renderLogin();
+		fireEvent.click(screen.getByRole('button', { name: /Google 계정으로 로그인/ }));
+		expect(localStorage.getItem('relaydam.token')).toBe('dev');
+		expect(screen.getByText('대시보드')).toBeDefined();
 	});
 
 	it('이미 로그인돼 있으면 /app으로 보낸다', () => {

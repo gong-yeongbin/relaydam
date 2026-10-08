@@ -23,4 +23,21 @@ export const theme: ThemeConfig = {
 		colorBgLayout: colors.bg,
 		borderRadius: 6,
 	},
+	components: {
+		// 사이드바 메뉴. 선택은 배경 없이 진한 글자 + 왼쪽 청록 세로선(AppShell의 CSS)
+		Menu: {
+			itemHeight: 36,
+			itemMarginInline: 0,
+			itemMarginBlock: 2,
+			itemBorderRadius: 0,
+			itemPaddingInline: 24,
+			fontSize: 14,
+			itemColor: colors.muted,
+			itemHoverColor: colors.ink,
+			itemHoverBg: 'transparent',
+			itemSelectedColor: colors.ink,
+			itemSelectedBg: 'transparent',
+			itemActiveBg: 'transparent',
+		},
+	},
 };
