@@ -11,6 +11,20 @@
 				background: #f5f7f6;
 				font-family: Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
 			}
+			/* 화면이 바뀔 때 살짝 떠오른다. 움직임을 줄인 설정이면 끈다 */
+			.page {
+				animation: page-in 150ms ease-out;
+			}
+			@keyframes page-in {
+				from {
+					opacity: 0;
+				}
+			}
+			@media (prefers-reduced-motion: reduce) {
+				.page {
+					animation: none;
+				}
+			}
 		</style>
 	</head>
 	<body>
